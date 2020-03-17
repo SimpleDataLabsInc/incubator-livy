@@ -11,9 +11,9 @@
 .project
 .classpath
 .scala_dependencies
-conf/*.conf
-conf/*.properties
-conf/*.sh
+#conf/*.conf
+#conf/*.properties
+#conf/*.sh
 docs/api/
 lib_managed/
 logs/
