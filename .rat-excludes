@@ -1,5 +1,6 @@
 Dockerfile
-buid.sh
+build.sh
+conf/hadoop/*
 .rat-excludes
 .github/*
 logs/*
