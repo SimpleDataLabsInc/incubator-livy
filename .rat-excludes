@@ -1,3 +1,5 @@
+Dockerfile
+buid.sh
 .rat-excludes
 .github/*
 logs/*
