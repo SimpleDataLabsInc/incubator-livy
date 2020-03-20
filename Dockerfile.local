@@ -50,10 +50,10 @@ RUN unzip apache-livy-${LIVY_BUILD_VERSION}-bin.zip -d /apps && \
       mkdir -p $LIVY_APP_PATH/logs
 
 COPY conf/log4j.properties $LIVY_CONF_PATH/
-COPY conf/livy.conf $LIVY_CONF_PATH/
+COPY conf/livy.conf.local $LIVY_CONF_PATH/livy.conf
 COPY conf/spark-log4j.properties $SPARK_HOME/conf/log4j.properties
-COPY conf/spark-defaults.conf $SPARK_HOME/conf/spark-defaults.conf
-COPY conf/hadoop /etc/hadoop
+COPY conf/spark-defaults.conf.local $SPARK_HOME/conf/spark-defaults.conf
+#COPY conf/hadoop /etc/hadoop
 
 EXPOSE 8998
 EXPOSE 11000

@@ -19,7 +19,7 @@
 # This is useful for setting default environmental settings.
 
 # Example:
-spark.master                       yarn
+#spark.master                       local
 spark.sql.extensions               org.apache.spark.sql.ProphecyExtensions$InterimExtensions$
 # spark.eventLog.enabled           true
 # spark.eventLog.dir               hdfs://namenode:8021/directory
@@ -28,5 +28,5 @@ spark.sql.extensions               org.apache.spark.sql.ProphecyExtensions$Inter
 # spark.executor.extraJavaOptions  -XX:+PrintGCDetails -Dkey=value -Dnumbers="one two three"
 # spark.driver.extraClassPath      /app/common/prophecy.jar
 spark.hadoop.yarn.timeline-service.enabled false
-spark.driver.extraJavaOptions -Dhdp.version=2.6.5.1175-1
-spark.yarn.am.extraJavaOptions -Dhdp.version=2.6.5.1175-1
+#spark.driver.extraJavaOptions -Dhdp.version=2.6.5.1175-1
+#spark.yarn.am.extraJavaOptions -Dhdp.version=2.6.5.1175-1
