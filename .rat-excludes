@@ -1,4 +1,4 @@
-Dockerfile
+Dockerfile*
 build.sh
 conf/hadoop/*
 .rat-excludes
