@@ -102,7 +102,11 @@ class ContextLauncher {
       String address = conf.get(LAUNCHER_ADDRESS);
       // If not specified, use the RPC server address; otherwise use the specified address.
       if (address == null || address.trim().isEmpty()) {
-        address = factory.getServer().getAddress();
+        // check once more, if it is provided as env var -- could be for containerized livy
+        address = System.getenv(LAUNCHER_ADDRESS.name());
+        if (address == null || address.trim().isEmpty()) {
+          address = factory.getServer().getAddress();
+        }
       }
       conf.set(LAUNCHER_ADDRESS, address);
       conf.set(LAUNCHER_PORT, factory.getServer().getPort());
