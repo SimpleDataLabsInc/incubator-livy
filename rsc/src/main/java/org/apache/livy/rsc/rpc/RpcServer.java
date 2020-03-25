@@ -105,7 +105,10 @@ public class RpcServer implements Closeable {
     LOG.info("Connected to the port " + this.port);
     String address = config.get(RPC_SERVER_ADDRESS);
     if (address == null) {
-      address = config.findLocalAddress();
+      address = System.getenv(RPC_SERVER_ADDRESS.name());
+      if (address == null) {
+        address = config.findLocalAddress();
+      }
     }
     this.address = address;
   }
