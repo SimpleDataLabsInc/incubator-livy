@@ -26,7 +26,10 @@ ENV HADOOP_ASSOCIATION hadoop2.7
 ENV SPARK_HOME /apps/spark-${SPARK_BUILD_VERSION}-bin-${HADOOP_ASSOCIATION}
 ENV SPARK_BUILD_PATH /apps/build/spark
 
-RUN mkdir -p /apps/build && cd /apps && wget https://archive.apache.org/dist/spark/spark-${SPARK_BUILD_VERSION}/spark-${SPARK_BUILD_VERSION}-bin-${HADOOP_ASSOCIATION}.tgz && tar -xvzf spark-${SPARK_BUILD_VERSION}-bin-${HADOOP_ASSOCIATION}.tgz
+RUN mkdir -p /apps/build && cd /apps && \
+wget https://archive.apache.org/dist/spark/spark-${SPARK_BUILD_VERSION}/spark-${SPARK_BUILD_VERSION}-bin-${HADOOP_ASSOCIATION}.tgz && \
+tar -xvzf spark-${SPARK_BUILD_VERSION}-bin-${HADOOP_ASSOCIATION}.tgz && \
+rm -rf spark-${SPARK_BUILD_VERSION}-bin-${HADOOP_ASSOCIATION}.tgz
 
 # ----------
 # Build Livy
@@ -45,8 +48,7 @@ RUN curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py && \
 COPY assembly/target/apache-livy-${LIVY_BUILD_VERSION}-bin.zip /
 RUN unzip apache-livy-${LIVY_BUILD_VERSION}-bin.zip -d /apps && \
     	mkdir -p $LIVY_APP_PATH/upload && \
-      mkdir -p $LIVY_APP_PATH/logs
-
+      mkdir -p $LIVY_APP_PATH/logs && rm -rf apache-livy-${LIVY_BUILD_VERSION}-bin.zip
 
 EXPOSE 8998
 EXPOSE 11000
