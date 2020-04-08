@@ -201,7 +201,7 @@
     <module>core/scala-2.11</module>
     <module>coverage</module>
     <module>examples</module>
-    <module>python-api</module>
+    <!-- <module>python-api</module> -->
     <module>repl</module>
     <module>repl/scala-2.11</module>
     <module>rsc</module>
