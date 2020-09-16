@@ -70,6 +70,10 @@ RUN cp ~/.m2/repository/com/amazonaws/aws-java-sdk/$AWS_SDK_VERSION/aws-java-sdk
 RUN cp ~/.m2/repository/org/apache/hadoop/hadoop-azure/$HADOOP_FULL_VERSION/hadoop-azure-$HADOOP_FULL_VERSION.jar $SPARK_HOME/jars/
 RUN cp ~/.m2/repository/com/microsoft/azure/azure-storage/$AZURE_SDK_VERSION/azure-storage-$AZURE_SDK_VERSION.jar $SPARK_HOME/jars/
 
+RUN update-alternatives --install /usr/bin/python python /usr/bin/python2.7 2
+# override with python3
+RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.5 3
+
 EXPOSE 8998
 EXPOSE 11000
 
