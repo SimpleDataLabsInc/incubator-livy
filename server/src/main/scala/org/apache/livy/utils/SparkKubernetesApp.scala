@@ -242,7 +242,6 @@ class SparkKubernetesApp private[utils](
     appTag: String,
     pollInterval: ScalaDuration,
     deadline: Deadline): KubernetesApplication = {
-    import KubernetesExtensions._
 
     withRetry(kubernetesClient.getApplications().find(_.getApplicationTag.contains(appTag)))
     match {
