@@ -22,7 +22,7 @@ import java.util.concurrent.TimeoutException
 import scala.annotation.tailrec
 import scala.collection.mutable.ArrayBuffer
 import scala.concurrent._
-import scala.concurrent.duration._
+import scala.concurrent.duration.{Duration => ScalaDuration, _}
 import scala.language.postfixOps
 import scala.util.{Failure, Success, Try}
 import scala.util.control.NonFatal
@@ -239,9 +239,11 @@ class SparkKubernetesApp private[utils](
    */
   @tailrec
   private def getAppFromTag(
-      appTag: String,
-      pollInterval: Duration,
-      deadline: Deadline): KubernetesApplication = {
+    appTag: String,
+    pollInterval: ScalaDuration,
+    deadline: Deadline): KubernetesApplication = {
+    import KubernetesExtensions._
+
     withRetry(kubernetesClient.getApplications().find(_.getApplicationTag.contains(appTag)))
     match {
       case Some(app) => app

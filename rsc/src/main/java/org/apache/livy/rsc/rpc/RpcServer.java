@@ -364,7 +364,13 @@ public class RpcServer implements Closeable {
       this.callback = callback;
     }
 
+    @Override
+    public String toString() {
+      return "ClientInfo{" +
+        "id='" + id + '\'' +
+        ", secret='" + secret + '\'' +
+        '}';
+    }
   }
-
 }
 

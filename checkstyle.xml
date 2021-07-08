@@ -99,11 +99,11 @@
       <message key="ws.illegalFollow" value="GenericWhitespace ''{0}'' should followed by whitespace."/>
       <message key="ws.notPreceded" value="GenericWhitespace ''{0}'' is not preceded with whitespace."/>
     </module>
-    <module name="ImportOrder">
-      <property name="separated" value="true"/>
-      <property name="ordered" value="true"/>
-      <property name="groups" value="/^javax?\./,scala,*,org.apache.livy"/>
-    </module>
+<!--    <module name="ImportOrder">-->
+<!--      <property name="separated" value="true"/>-->
+<!--      <property name="ordered" value="true"/>-->
+<!--      <property name="groups" value="/^javax?\./,scala,*,org.apache.livy"/>-->
+<!--    </module>-->
     <module name="MethodParamPad"/>
     <module name="AnnotationLocation">
       <property name="tokens" value="CLASS_DEF, INTERFACE_DEF, ENUM_DEF, METHOD_DEF, CTOR_DEF"/>

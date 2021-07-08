@@ -34,4 +34,13 @@ class ContextInfo {
     this.secret = secret;
   }
 
+  @Override
+  public String toString() {
+    return "ContextInfo{" +
+      "remoteAddress='" + remoteAddress + '\'' +
+      ", remotePort=" + remotePort +
+      ", clientId='" + clientId + '\'' +
+      ", secret='" + secret + '\'' +
+      '}';
+  }
 }

@@ -168,6 +168,13 @@ public abstract class BaseProtocol extends RpcDispatcher {
       this(null, -1);
     }
 
+    @Override
+    public String toString() {
+      return "RemoteDriverAddress{" +
+        "host='" + host + '\'' +
+        ", port=" + port +
+        '}';
+    }
   }
 
   public static class ReplJobRequest {

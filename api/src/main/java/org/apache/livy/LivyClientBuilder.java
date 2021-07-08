@@ -28,13 +28,17 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.ServiceLoader;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 /**
  * A builder for Livy clients.
  */
 public final class LivyClientBuilder {
-
+  private static final Logger LOG = LoggerFactory.getLogger(LivyClientBuilder.class);
   public static final String LIVY_URI_KEY = "livy.uri";
 
   private static final ServiceLoader<LivyClientFactory> CLIENT_FACTORY_LOADER =
@@ -121,6 +125,7 @@ public final class LivyClientBuilder {
   }
 
   public LivyClient build() {
+    LOG.info("Building Livy Client with config: {}", config);
     String uriStr = config.getProperty(LIVY_URI_KEY);
     if (uriStr == null) {
       throw new IllegalArgumentException("URI must be provided.");

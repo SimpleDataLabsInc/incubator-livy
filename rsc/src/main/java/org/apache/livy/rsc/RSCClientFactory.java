@@ -28,12 +28,14 @@ import io.netty.util.concurrent.Promise;
 import org.apache.livy.LivyClient;
 import org.apache.livy.LivyClientFactory;
 import org.apache.livy.rsc.rpc.RpcServer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Factory for RSC clients.
  */
 public final class RSCClientFactory implements LivyClientFactory {
-
+  private static final Logger LOG = LoggerFactory.getLogger(RSCClientFactory.class);
   private final AtomicInteger refCount = new AtomicInteger();
   private RpcServer server = null;
   // interactive session child processes number
@@ -54,6 +56,7 @@ public final class RSCClientFactory implements LivyClientFactory {
    */
   @Override
   public LivyClient createClient(URI uri, Properties config) {
+    LOG.info("Creating livy client to {} with properties: {}", uri, config);
     if (!"rsc".equals(uri.getScheme())) {
       return null;
     }
