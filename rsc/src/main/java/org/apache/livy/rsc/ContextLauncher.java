@@ -343,7 +343,8 @@ class ContextLauncher {
     private void handle(ChannelHandlerContext ctx, RemoteDriverAddress msg) {
       InetSocketAddress insocket = (InetSocketAddress) ctx.channel().remoteAddress();
       String ip = insocket.getAddress().getHostAddress();
-      ContextInfo info = new ContextInfo(ip, msg.port, clientId, secret);
+      ContextInfo info = new ContextInfo(msg.host, msg.port, clientId, secret);
+      LOG.info("Got remote driver address: {}", msg);
       if (promise.trySuccess(info)) {
         timeout.cancel(true);
         LOG.debug("Received driver info for client {}: {}/{}.", client.getChannel(),
