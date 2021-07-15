@@ -123,6 +123,7 @@ public class Rpc implements Closeable {
     eloop.schedule(new Runnable() {
       @Override
       public void run() {
+        LOG.info("Attempting connection to {}:{}", host, port);
         ChannelFuture cf0 = bootstrap.connect(host, port);
         atomicChannelFuture.set(cf0);
         // The channel listener instantiates the Rpc instance when the connection is established,
@@ -133,7 +134,7 @@ public class Rpc implements Closeable {
         );
         cf0.addListener(listener);
       }
-    }, 30, TimeUnit.SECONDS);
+    }, 5, TimeUnit.SECONDS);
 
     // Handle cancellation of the promise.
     promise.addListener(new GenericFutureListener<Promise<Rpc>>() {
