@@ -344,7 +344,7 @@ class ContextLauncher {
       InetSocketAddress insocket = (InetSocketAddress) ctx.channel().remoteAddress();
       String ip = insocket.getAddress().getHostAddress();
       if (ip.equals("127.0.0.1")) {
-        ip = msg.host;
+        ip = msg.host + "-svc";
       }
       ContextInfo info = new ContextInfo(ip, msg.port, clientId, secret);
       LOG.info("Got remote driver address: {} from channel {}", msg, ctx.channel());
