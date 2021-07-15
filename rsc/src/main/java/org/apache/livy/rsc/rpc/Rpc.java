@@ -27,6 +27,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.security.auth.callback.Callback;
@@ -39,13 +40,7 @@ import javax.security.sasl.SaslClient;
 import javax.security.sasl.SaslException;
 
 import io.netty.bootstrap.Bootstrap;
-import io.netty.channel.Channel;
-import io.netty.channel.ChannelFuture;
-import io.netty.channel.ChannelFutureListener;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelInboundHandlerAdapter;
-import io.netty.channel.ChannelOption;
-import io.netty.channel.EventLoopGroup;
+import io.netty.channel.*;
 import io.netty.channel.embedded.EmbeddedChannel;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
@@ -62,6 +57,7 @@ import org.slf4j.LoggerFactory;
 
 import org.apache.livy.rsc.RSCConf;
 import org.apache.livy.rsc.Utils;
+
 import static org.apache.livy.rsc.RSCConf.Entry.*;
 
 /**
@@ -77,35 +73,38 @@ public class Rpc implements Closeable {
   static final String SASL_PROTOCOL = "rsc";
   static final String SASL_AUTH_CONF = "auth-conf";
 
+
   /**
    * Creates an RPC client for a server running on the given remote host and port.
    *
-   * @param config RPC configuration data.
-   * @param eloop Event loop for managing the connection.
-   * @param host Host name or IP address to connect to.
-   * @param port Port where server is listening.
-   * @param clientId The client ID that identifies the connection.
-   * @param secret Secret for authenticating the client with the server.
+   * @param config     RPC configuration data.
+   * @param eloop      Event loop for managing the connection.
+   * @param host       Host name or IP address to connect to.
+   * @param port       Port where server is listening.
+   * @param clientId   The client ID that identifies the connection.
+   * @param secret     Secret for authenticating the client with the server.
    * @param dispatcher Dispatcher used to handle RPC calls.
    * @return A future that can be used to monitor the creation of the RPC object.
    */
   public static Promise<Rpc> createClient(
-      final RSCConf config,
-      final EventLoopGroup eloop,
-      String host,
-      int port,
-      final String clientId,
-      final String secret,
-      final RpcDispatcher dispatcher) throws Exception {
+    final RSCConf config,
+    final EventLoopGroup eloop,
+    String host,
+    int port,
+    final String clientId,
+    final String secret,
+    final RpcDispatcher dispatcher) throws Exception {
     int connectTimeoutMs = (int) config.getTimeAsMs(RPC_CLIENT_CONNECT_TIMEOUT);
 
-    final ChannelFuture cf = new Bootstrap()
-        .group(eloop)
-        .handler(new ChannelInboundHandlerAdapter() { })
-        .channel(NioSocketChannel.class)
-        .option(ChannelOption.SO_KEEPALIVE, true)
-        .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, connectTimeoutMs)
-        .connect(host, port);
+    Bootstrap bootstrap = new Bootstrap()
+      .group(eloop)
+      .handler(new ChannelInboundHandlerAdapter() {
+      })
+      .channel(NioSocketChannel.class)
+      .option(ChannelOption.SO_KEEPALIVE, true)
+      .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, connectTimeoutMs);
+
+
 
     final Promise<Rpc> promise = eloop.next().newPromise();
     final AtomicReference<Rpc> rpc = new AtomicReference<Rpc>();
@@ -118,11 +117,71 @@ public class Rpc implements Closeable {
       }
     };
     final ScheduledFuture<?> timeoutFuture = eloop.schedule(timeoutTask,
-        config.getTimeAsMs(RPC_CLIENT_HANDSHAKE_TIMEOUT), TimeUnit.MILLISECONDS);
+      config.getTimeAsMs(RPC_CLIENT_HANDSHAKE_TIMEOUT), TimeUnit.MILLISECONDS);
 
-    // The channel listener instantiates the Rpc instance when the connection is established,
-    // and initiates the SASL handshake.
-    cf.addListener(new ChannelFutureListener() {
+    AtomicReference<ChannelFuture> atomicChannelFuture = new AtomicReference<>();
+    eloop.schedule(new Runnable() {
+      @Override
+      public void run() {
+        ChannelFuture cf0 = bootstrap.connect(host, port);
+        atomicChannelFuture.set(cf0);
+        // The channel listener instantiates the Rpc instance when the connection is established,
+        // and initiates the SASL handshake.
+        ChannelFutureListener listener = new RetryingListener(
+          config, eloop, host, port, clientId, secret, dispatcher,
+          promise, atomicChannelFuture, bootstrap, timeoutFuture
+        );
+        cf0.addListener(listener);
+      }
+    }, 30, TimeUnit.SECONDS);
+
+    // Handle cancellation of the promise.
+    promise.addListener(new GenericFutureListener<Promise<Rpc>>() {
+      @Override
+      public void operationComplete(Promise<Rpc> p) {
+        if (p.isCancelled()) {
+          ChannelFuture cfToCancel = atomicChannelFuture.get();
+          if (cfToCancel != null) {
+            cfToCancel.cancel(true);
+          }
+        }
+      }
+    });
+
+    return promise;
+  }
+  @ChannelHandler.Sharable
+    static class RetryingListener implements ChannelFutureListener {
+      final RSCConf config;
+      final EventLoopGroup eloop;
+      final String host;
+      final int port;
+      final String clientId;
+      final String secret;
+      final RpcDispatcher dispatcher;
+      final Promise<Rpc> promise;
+      final AtomicReference<ChannelFuture> atomicChannelFuture;
+      final Bootstrap bootstrap;
+      final ScheduledFuture<?> timeoutFuture;
+
+      RetryingListener(RSCConf config, EventLoopGroup eloop, String host, int port,
+                       String clientId, String secret, RpcDispatcher dispatcher,
+                       Promise<Rpc> promise, AtomicReference<ChannelFuture> atomicChannelFuture,
+                       Bootstrap bootstrap, ScheduledFuture<?> timeoutFuture) {
+        this.config = config;
+        this.eloop = eloop;
+        this.host = host;
+        this.port = port;
+        this.clientId = clientId;
+        this.secret = secret;
+        this.dispatcher = dispatcher;
+        this.promise = promise;
+        this.atomicChannelFuture = atomicChannelFuture;
+        this.bootstrap = bootstrap;
+        this.timeoutFuture = timeoutFuture;
+      }
+      final AtomicInteger attempt = new AtomicInteger();
+
       @Override
       public void operationComplete(ChannelFuture cf) throws Exception {
         if (cf.isSuccess()) {
@@ -131,35 +190,35 @@ public class Rpc implements Closeable {
           Rpc rpc = createRpc(config, saslHandler, (SocketChannel) cf.channel(), eloop);
           saslHandler.rpc = rpc;
           saslHandler.sendHello(cf.channel());
-        } else {
+        } else if (attempt.incrementAndGet() > 50) {
+          // fails to connect even after maxretries do something
           promise.setFailure(cf.cause());
+        } else {
+          LOG.error("Retrying connection to {}:{} attempt#{}", host, port, attempt.get(),
+            cf.cause());
+          // retry
+          ChannelFuture existingCf = atomicChannelFuture.get();
+          if (existingCf != null) {
+            existingCf.removeListener(this);
+          }
+          Thread.sleep(2000);
+          ChannelFuture cf1 = bootstrap.connect(host, port);
+          atomicChannelFuture.set(cf1);
+          cf1.addListener(this);
         }
       }
-    });
-
-    // Handle cancellation of the promise.
-    promise.addListener(new GenericFutureListener<Promise<Rpc>>() {
-      @Override
-      public void operationComplete(Promise<Rpc> p) {
-        if (p.isCancelled()) {
-          cf.cancel(true);
-        }
-      }
-    });
-
-    return promise;
-  }
+    }
 
   static Rpc createServer(SaslHandler saslHandler, RSCConf config, SocketChannel channel,
-      EventExecutorGroup egroup) throws IOException {
+                          EventExecutorGroup egroup) throws IOException {
     return createRpc(config, saslHandler, channel, egroup);
   }
 
   private static Rpc createRpc(RSCConf config,
-      SaslHandler saslHandler,
-      SocketChannel client,
-      EventExecutorGroup egroup)
-      throws IOException {
+                               SaslHandler saslHandler,
+                               SocketChannel client,
+                               EventExecutorGroup egroup)
+    throws IOException {
     LogLevel logLevel = LogLevel.TRACE;
     String logLevelStr = config.get(RPC_CHANNEL_LOG_LEVEL);
     if (logLevelStr != null) {
@@ -172,21 +231,21 @@ public class Rpc implements Closeable {
 
     boolean logEnabled = false;
     switch (logLevel) {
-    case DEBUG:
-      logEnabled = LOG.isDebugEnabled();
-      break;
-    case ERROR:
-      logEnabled = LOG.isErrorEnabled();
-      break;
-    case INFO:
-      logEnabled = LOG.isInfoEnabled();
-      break;
-    case TRACE:
-      logEnabled = LOG.isTraceEnabled();
-      break;
-    case WARN:
-      logEnabled = LOG.isWarnEnabled();
-      break;
+      case DEBUG:
+        logEnabled = LOG.isDebugEnabled();
+        break;
+      case ERROR:
+        logEnabled = LOG.isErrorEnabled();
+        break;
+      case INFO:
+        logEnabled = LOG.isInfoEnabled();
+        break;
+      case TRACE:
+        logEnabled = LOG.isTraceEnabled();
+        break;
+      case WARN:
+        logEnabled = LOG.isWarnEnabled();
+        break;
     }
 
     if (logEnabled) {
@@ -194,19 +253,19 @@ public class Rpc implements Closeable {
     }
 
     KryoMessageCodec kryo = new KryoMessageCodec(config.getInt(RPC_MAX_MESSAGE_SIZE),
-        MessageHeader.class, NullMessage.class, SaslMessage.class);
+      MessageHeader.class, NullMessage.class, SaslMessage.class);
     saslHandler.setKryoMessageCodec(kryo);
     client.pipeline()
-        .addLast("codec", kryo)
-        .addLast("sasl", saslHandler);
+      .addLast("codec", kryo)
+      .addLast("sasl", saslHandler);
     return new Rpc(config, client, egroup);
   }
 
   static Rpc createEmbedded(RpcDispatcher dispatcher) {
     EmbeddedChannel c = new EmbeddedChannel(
-        new LoggingHandler(Rpc.class),
-        new KryoMessageCodec(0, MessageHeader.class, NullMessage.class),
-        dispatcher);
+      new LoggingHandler(Rpc.class),
+      new KryoMessageCodec(0, MessageHeader.class, NullMessage.class),
+      dispatcher);
     Rpc rpc = new Rpc(new RSCConf(null), c, ImmediateEventExecutor.INSTANCE);
     rpc.dispatcher = dispatcher;
     dispatcher.registerRpc(c, rpc);
@@ -236,16 +295,17 @@ public class Rpc implements Closeable {
 
     // Note: this does not work for embedded channels.
     channel.pipeline().addLast("monitor", new ChannelInboundHandlerAdapter() {
-        @Override
-        public void channelInactive(ChannelHandlerContext ctx) throws Exception {
-          close();
-          super.channelInactive(ctx);
-        }
+      @Override
+      public void channelInactive(ChannelHandlerContext ctx) throws Exception {
+        close();
+        super.channelInactive(ctx);
+      }
     });
   }
 
   /**
    * For debugging purposes.
+   *
    * @return The name of this Class.
    */
   protected String name() {
@@ -253,7 +313,7 @@ public class Rpc implements Closeable {
   }
 
   public void handleMsg(ChannelHandlerContext ctx, Object msg, Class<?> handleClass, Object obj)
-      throws Exception {
+    throws Exception {
     if (lastHeader == null) {
       if (!(msg instanceof MessageHeader)) {
         LOG.warn("[{}] Expected RPC header, got {} instead.", name(),
@@ -285,18 +345,18 @@ public class Rpc implements Closeable {
   }
 
   private void handleCall(ChannelHandlerContext ctx, Object msg, Class<?> handleClass, Object obj)
-      throws Exception {
+    throws Exception {
     Method handler = handlers.get(msg.getClass());
     if (handler == null) {
       // Try both getDeclaredMethod() and getMethod() so that we try both private methods
       // of the class, and public methods of parent classes.
       try {
         handler = handleClass.getDeclaredMethod("handle", ChannelHandlerContext.class,
-            msg.getClass());
+          msg.getClass());
       } catch (NoSuchMethodException e) {
         try {
           handler = handleClass.getMethod("handle", ChannelHandlerContext.class,
-              msg.getClass());
+            msg.getClass());
         } catch (NoSuchMethodException e2) {
           LOG.warn(String.format("[%s] Failed to find handler for msg '%s'.", name(),
             msg.getClass().getName()));
@@ -330,7 +390,7 @@ public class Rpc implements Closeable {
       rpc.future.setFailure(new RpcException((String) msg));
     } else {
       String error = String.format("Received error with unexpected payload (%s).",
-          msg != null ? msg.getClass().getName() : null);
+        msg != null ? msg.getClass().getName() : null);
       LOG.warn(String.format("[%s] %s", name(), error));
       rpc.future.setFailure(new IllegalArgumentException(error));
       ctx.close();
@@ -343,7 +403,7 @@ public class Rpc implements Closeable {
   }
 
   private OutstandingRpc findRpcCall(long id) {
-    for (Iterator<OutstandingRpc> it = rpcCalls.iterator(); it.hasNext();) {
+    for (Iterator<OutstandingRpc> it = rpcCalls.iterator(); it.hasNext(); ) {
       OutstandingRpc rpc = it.next();
       if (rpc.id == id) {
         it.remove();
@@ -351,7 +411,7 @@ public class Rpc implements Closeable {
       }
     }
     throw new IllegalArgumentException(String.format(
-        "Received RPC reply for unknown RPC (%d).", id));
+      "Received RPC reply for unknown RPC (%d).", id));
   }
 
   private void registerRpcCall(long id, Promise<?> promise, String type) {
@@ -419,7 +479,7 @@ public class Rpc implements Closeable {
    * Send an RPC call to the remote endpoint and returns a future that can be used to monitor the
    * operation.
    *
-   * @param msg RPC call to send.
+   * @param msg     RPC call to send.
    * @param retType Type of expected reply.
    * @return A future used to monitor the operation.
    */
@@ -430,15 +490,15 @@ public class Rpc implements Closeable {
       final long id = rpcId.getAndIncrement();
       final Promise<T> promise = egroup.next().newPromise();
       final ChannelFutureListener listener = new ChannelFutureListener() {
-          @Override
-          public void operationComplete(ChannelFuture cf) {
-            if (!cf.isSuccess() && !promise.isDone()) {
-              LOG.warn("Failed to send RPC, closing connection.", cf.cause());
-              promise.setFailure(cf.cause());
-              discardRpcCall(id);
-              close();
-            }
+        @Override
+        public void operationComplete(ChannelFuture cf) {
+          if (!cf.isSuccess() && !promise.isDone()) {
+            LOG.warn("Failed to send RPC, closing connection.", cf.cause());
+            promise.setFailure(cf.cause());
+            discardRpcCall(id);
+            close();
           }
+        }
       };
 
       registerRpcCall(id, promise, msg.getClass().getName());
@@ -543,20 +603,20 @@ public class Rpc implements Closeable {
     private Rpc rpc;
 
     SaslClientHandler(
-        RSCConf config,
-        String clientId,
-        Promise<Rpc> promise,
-        ScheduledFuture<?> timeout,
-        String secret,
-        RpcDispatcher dispatcher)
-        throws IOException {
+      RSCConf config,
+      String clientId,
+      Promise<Rpc> promise,
+      ScheduledFuture<?> timeout,
+      String secret,
+      RpcDispatcher dispatcher)
+      throws IOException {
       super(config);
       this.clientId = clientId;
       this.promise = promise;
       this.timeout = timeout;
       this.secret = secret;
       this.dispatcher = dispatcher;
-      this.client = Sasl.createSaslClient(new String[] { config.get(SASL_MECHANISMS) },
+      this.client = Sasl.createSaslClient(new String[]{config.get(SASL_MECHANISMS)},
         null, SASL_PROTOCOL, SASL_REALM, config.getSaslOptions(), this);
     }
 
@@ -615,9 +675,9 @@ public class Rpc implements Closeable {
     public void handle(Callback[] callbacks) {
       for (Callback cb : callbacks) {
         if (cb instanceof NameCallback) {
-          ((NameCallback)cb).setName(clientId);
+          ((NameCallback) cb).setName(clientId);
         } else if (cb instanceof PasswordCallback) {
-          ((PasswordCallback)cb).setPassword(secret.toCharArray());
+          ((PasswordCallback) cb).setPassword(secret.toCharArray());
         } else if (cb instanceof RealmCallback) {
           RealmCallback rb = (RealmCallback) cb;
           rb.setText(rb.getDefaultText());
