@@ -18,18 +18,16 @@
 package org.apache.livy.utils
 
 import java.util.concurrent.TimeoutException
-
 import scala.annotation.tailrec
 import scala.collection.mutable.ArrayBuffer
 import scala.concurrent._
-import scala.concurrent.duration.{Duration ⇒ ScalaDuration, _}
+import scala.concurrent.duration.{Duration => ScalaDuration, _}
 import scala.language.postfixOps
 import scala.util.{Failure, Success, Try}
 import scala.util.control.NonFatal
-
 import io.fabric8.kubernetes.api.model.Pod
 import io.fabric8.kubernetes.client._
-
+import org.apache.livy.utils.SparkKubernetesApp.KubernetesApplicationState.{PENDING, RUNNING, TERMINATED}
 import org.apache.livy.{LivyConf, Logging, Utils}
 
 import scala.collection.JavaConverters._
@@ -300,7 +298,11 @@ private[utils] case class KubernetesAppReport(driver: Option[Pod], executors: Se
         val driverPodStatus = status.getContainerStatuses.asScala.find(_.getName == "spark-kubernetes-driver")
         logger.info(s"Driver Pod: $driverPodStatus")
         driverPodStatus match {
-          case Some(st) ⇒ st.getState.toString
+          case Some(st) ⇒
+            if(st.getState.getRunning != null) RUNNING
+            else if(st.getState.getTerminated != null) TERMINATED
+            else if(st.getState.getWaiting != null) PENDING
+            else "unknown"
           case None     ⇒ status.getPhase.toLowerCase
         }
       case None ⇒ "unknown"
