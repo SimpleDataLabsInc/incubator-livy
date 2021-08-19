@@ -174,6 +174,7 @@ class SparkKubernetesApp private[utils] (
           val appReport = withRetry(kubernetesClient.getApplicationReport(app, cacheLogSize))
           kubernetesAppLog = appReport.getApplicationLog
           kubernetesDiagnostics = appReport.getApplicationDiagnostics
+          info(s"ApplicationState => ${appReport.getApplicationState}, appTag => ${appTag}")
           changeState(mapKubernetesState(appReport.getApplicationState, appTag))
 
           Clock.sleep(pollInterval.toMillis)
