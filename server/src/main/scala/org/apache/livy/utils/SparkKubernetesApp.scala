@@ -27,7 +27,7 @@ import scala.util.{Failure, Success, Try}
 import scala.util.control.NonFatal
 import io.fabric8.kubernetes.api.model.Pod
 import io.fabric8.kubernetes.client._
-import org.apache.livy.utils.SparkKubernetesApp.KubernetesApplicationState.{PENDING, RUNNING, TERMINATED}
+import org.apache.livy.utils.SparkKubernetesApp.KubernetesApplicationState.{FAILED, PENDING, RUNNING, TERMINATED}
 import org.apache.livy.{LivyConf, Logging, Utils}
 
 import scala.collection.JavaConverters._
@@ -300,7 +300,13 @@ private[utils] case class KubernetesAppReport(driver: Option[Pod], executors: Se
         driverPodStatus match {
           case Some(st) ⇒
             if(st.getState.getRunning != null) RUNNING
-            else if(st.getState.getTerminated != null) TERMINATED
+            else if(st.getState.getTerminated != null){
+              if(st.getState.getTerminated.getExitCode != 0){
+                FAILED
+              }else {
+                TERMINATED
+              }
+            }
             else if(st.getState.getWaiting != null) PENDING
             else "unknown"
           case None     ⇒ status.getPhase.toLowerCase
