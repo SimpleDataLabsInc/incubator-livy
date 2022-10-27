@@ -48,6 +48,7 @@ RUN mvn dependency:get -DgroupId=org.apache.hadoop -DartifactId=hadoop-aws -Dver
 RUN mvn dependency:get -DgroupId=com.amazonaws -DartifactId=aws-java-sdk -Dversion=$AWS_SDK_VERSION
 RUN mvn dependency:get -DgroupId=org.apache.hadoop -DartifactId=hadoop-azure -Dversion=$HADOOP_FULL_VERSION
 RUN mvn dependency:get -DgroupId=com.microsoft.azure -DartifactId=azure-storage -Dversion=$AZURE_SDK_VERSION
+RUN mvn dependency:get -DgroupId=com.google.code.findbugs -DartifactId=jsr305 -Dversion=1.3.9
 
 #RUN pip3 install matplotlib pandas
 ARG SPARK_VERSION
