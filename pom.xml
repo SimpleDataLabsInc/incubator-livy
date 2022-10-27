@@ -169,7 +169,7 @@
 
     <maven.compiler.source>${java.version}</maven.compiler.source>
     <maven.compiler.target>${java.version}</maven.compiler.target>
-
+    <skipTests>false</skipTests>
   </properties>
 
   <repositories>
@@ -744,6 +744,7 @@
             <junitxml>.</junitxml>
             <filereports>WDF TestSuite.txt</filereports>
             <argLine>${argLine} -Xmx2g</argLine>
+            <skipTests>${skipTests}</skipTests>
           </configuration>
           <executions>
             <execution>
