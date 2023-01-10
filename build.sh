@@ -24,7 +24,7 @@ if [[ -z "$SPARK_VERSION" ]]; then
   fi
 fi
 if [[ "$SPARK_VERSION" =~ ^2.* ]]; then
-  SPARK_VERSION="2.4.5"
+  SPARK_VERSION="2.3.0"
   # option to overwrite scala version from command line
   if [[ -z "$SCALA_VERSION" ]]; then
     SCALA_VERSION="2.11"
