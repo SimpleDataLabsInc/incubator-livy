@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# put postgres start here
+$LIVY_HOME/bin/livy-server
