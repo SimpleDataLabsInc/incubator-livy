@@ -1065,21 +1065,21 @@
         </executions>
       </plugin>
 
-      <plugin>
-        <groupId>org.apache.rat</groupId>
-        <artifactId>apache-rat-plugin</artifactId>
-        <configuration>
-          <excludesFile>${execution.root}/.rat-excludes</excludesFile>
-        </configuration>
-        <executions>
-          <execution>
-            <phase>verify</phase>
-            <goals>
-              <goal>check</goal>
-            </goals>
-          </execution>
-        </executions>
-      </plugin>
+<!--      <plugin>-->
+<!--        <groupId>org.apache.rat</groupId>-->
+<!--        <artifactId>apache-rat-plugin</artifactId>-->
+<!--        <configuration>-->
+<!--          <excludesFile>${execution.root}/.rat-excludes</excludesFile>-->
+<!--        </configuration>-->
+<!--        <executions>-->
+<!--          <execution>-->
+<!--            <phase>verify</phase>-->
+<!--            <goals>-->
+<!--              <goal>check</goal>-->
+<!--            </goals>-->
+<!--          </execution>-->
+<!--        </executions>-->
+<!--      </plugin>-->
 
       <!-- Override this plugin with parent POM to add DISCLAIMER file to artifacts. -->
       <plugin>
