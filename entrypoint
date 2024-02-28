@@ -1,3 +1,6 @@
 #!/usr/bin/env bash
 # put postgres start here
+#$LIVY_HOME/bin/livy-server start
+#tail -F $LIVY_HOME/logs/*out
+# with `start` it starts in background, so using old way
 $LIVY_HOME/bin/livy-server

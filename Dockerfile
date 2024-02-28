@@ -69,6 +69,13 @@ wget https://archive.apache.org/dist/spark/spark-${SPARK_BUILD_VERSION}/spark-${
 tar -xvzf spark-${SPARK_BUILD_VERSION}-bin-${HADOOP_ASSOCIATION}.tgz && \
 rm -rf spark-${SPARK_BUILD_VERSION}-bin-${HADOOP_ASSOCIATION}.tgz
 
+RUN mvn dependency:get -DgroupId=org.apache.hadoop -DartifactId=hadoop-aws -Dversion=$HADOOP_FULL_VERSION
+RUN mvn dependency:get -DgroupId=com.amazonaws -DartifactId=aws-java-sdk -Dversion=$AWS_SDK_VERSION
+RUN mvn dependency:get -DgroupId=org.apache.hadoop -DartifactId=hadoop-azure -Dversion=$HADOOP_FULL_VERSION
+RUN mvn dependency:get -DgroupId=com.microsoft.azure -DartifactId=azure-storage -Dversion=$AZURE_SDK_VERSION
+RUN mvn dependency:get -DgroupId=org.postgresql -DartifactId=postgresql -Dversion=$POSTGRES_DRIVER_VERSION
+
+
 # ----------
 # Build Livy
 # ----------
@@ -82,12 +89,6 @@ COPY assembly/target/apache-livy-${LIVY_BUILD_VERSION}-bin.zip apache-livy-${LIV
 RUN unzip apache-livy-${LIVY_BUILD_VERSION}-bin.zip -d /apps && \
     	mkdir -p $LIVY_HOME/upload && \
       mkdir -p $LIVY_HOME/logs && rm -rf apache-livy-${LIVY_BUILD_VERSION}-bin.zip
-
-RUN mvn dependency:get -DgroupId=org.apache.hadoop -DartifactId=hadoop-aws -Dversion=$HADOOP_FULL_VERSION
-RUN mvn dependency:get -DgroupId=com.amazonaws -DartifactId=aws-java-sdk -Dversion=$AWS_SDK_VERSION
-RUN mvn dependency:get -DgroupId=org.apache.hadoop -DartifactId=hadoop-azure -Dversion=$HADOOP_FULL_VERSION
-RUN mvn dependency:get -DgroupId=com.microsoft.azure -DartifactId=azure-storage -Dversion=$AZURE_SDK_VERSION
-RUN mvn dependency:get -DgroupId=org.postgresql -DartifactId=postgresql -Dversion=$POSTGRES_DRIVER_VERSION
 
 
 RUN cp ~/.m2/repository/org/apache/hadoop/hadoop-aws/$HADOOP_FULL_VERSION/hadoop-aws-$HADOOP_FULL_VERSION.jar $LIVY_HOME/jars/
