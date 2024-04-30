@@ -23,6 +23,9 @@
 # Specify the key password.
 # livy.key-password =
 
+# Name of the keystore implementation that was used when generating the keystore
+# livy.keystore.type = JKS
+
 # Hadoop Credential Provider Path to get "livy.keystore.password" and "livy.key-password".
 # Credential Provider can be created using command as follow:
 # hadoop credential create "livy.keystore.password" -value "secret" -provider jceks://hdfs/path/to/livy.jceks
@@ -47,6 +50,9 @@
 # Configure Livy server http request and response header size.
 # livy.server.request-header.size = 131072
 # livy.server.response-header.size = 131072
+
+# Whether or not to send server version in http response.
+# livy.server.send-server-version = false
 
 # Enabled to check whether timeout Livy sessions should be stopped.
 # livy.server.session.timeout-check = true
@@ -185,3 +191,12 @@
 # livy.server.auth.<custom>.class = <class of custom auth filter>
 # livy.server.auth.<custom>.param.<foo1> = <bar1>
 # livy.server.auth.<custom>.param.<foo2> = <bar2>
+
+# Enable to allow custom classpath by proxy user in cluster mode
+# The below configuration parameter is disabled by default.
+# livy.server.session.allow-custom-classpath = true
+
+# value specifies interval to check safe mode in hdfs filesystem
+# livy.server.hdfs.safe-mode.interval = 5
+# value specifies max attempts to retry when safe mode is ON in hdfs filesystem
+# livy.server.hdfs.safe-mode.max.retry.attempts = 10

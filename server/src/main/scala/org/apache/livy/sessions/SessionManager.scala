@@ -27,6 +27,7 @@ import scala.reflect.ClassTag
 import scala.util.control.NonFatal
 
 import org.apache.livy.{LivyConf, Logging}
+import org.apache.livy.client.common.ClientConf
 import org.apache.livy.server.batch.{BatchRecoveryMetadata, BatchSession}
 import org.apache.livy.server.interactive.{InteractiveRecoveryMetadata, InteractiveSession, SessionHeartbeatWatchdog}
 import org.apache.livy.server.recovery.SessionStore
@@ -79,8 +80,9 @@ class SessionManager[S <: Session, R <: RecoveryMetadata : ClassTag](
   private[this] final val sessionTimeoutCheck = livyConf.getBoolean(LivyConf.SESSION_TIMEOUT_CHECK)
   private[this] final val sessionTimeoutCheckSkipBusy =
     livyConf.getBoolean(LivyConf.SESSION_TIMEOUT_CHECK_SKIP_BUSY)
-  private[this] final val sessionTimeout =
-    TimeUnit.MILLISECONDS.toNanos(livyConf.getTimeAsMs(LivyConf.SESSION_TIMEOUT))
+
+  private[this] final val sessionTimeout = livyConf.getTimeAsMs(LivyConf.SESSION_TIMEOUT)
+
   private[this] final val sessionStateRetainedInSec =
     TimeUnit.MILLISECONDS.toNanos(livyConf.getTimeAsMs(LivyConf.SESSION_STATE_RETAIN_TIME))
 
@@ -168,13 +170,33 @@ class SessionManager[S <: Session, R <: RecoveryMetadata : ClassTag](
             false
           } else {
             val currentTime = System.nanoTime()
-            currentTime - session.lastActivity > sessionTimeout
+            var calculatedTimeout = sessionTimeout;
+            if (session.idleTimeout.isDefined) {
+              calculatedTimeout = ClientConf.getTimeAsMs(session.idleTimeout.get)
+            }
+            calculatedTimeout = TimeUnit.MILLISECONDS.toNanos(calculatedTimeout)
+            if (currentTime - session.lastActivity > calculatedTimeout) {
+              return true
+            }
+            if (session.ttl.isDefined && session.startedOn.isDefined) {
+              calculatedTimeout = TimeUnit.MILLISECONDS.toNanos(
+                ClientConf.getTimeAsMs(session.ttl.get))
+              if (currentTime - session.startedOn.get > calculatedTimeout) {
+                return true
+              }
+            }
+            false
           }
       }
     }
 
     Future.sequence(all().filter(expired).map { s =>
-      info(s"Deleting $s because it was inactive for more than ${sessionTimeout / 1e6} ms.")
+      s.state match {
+        case st: FinishedSessionState =>
+          info(s"Deleting $s because it finished before ${sessionStateRetainedInSec / 1e9} secs.")
+        case _ =>
+          info(s"Deleting $s because it was inactive or the time to leave the period is over.")
+      }
       delete(s)
     })
   }

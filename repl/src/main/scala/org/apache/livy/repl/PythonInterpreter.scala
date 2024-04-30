@@ -269,11 +269,21 @@ private class PythonInterpreter(
   }
 
   override protected def sendShutdownRequest(): Unit = {
-    sendRequest(Map(
+    stdin.println(write(Map(
       "msg_type" -> "shutdown_request",
       "content" -> ()
-    )).foreach { case rep =>
-      warn(f"process failed to shut down while returning $rep")
+    )))
+    stdin.flush()
+
+    // Pyspark prints profile info to stdout when enabling spark.python.profile. see SPARK-37443
+    var lines = Seq[String]()
+    var line = stdout.readLine()
+    while(line != null) {
+      lines :+= line
+      line = stdout.readLine()
+    }
+    if (lines.nonEmpty) {
+      warn(f"python process shut down while returning ${lines.mkString("\n")}")
     }
   }
 
@@ -290,13 +300,14 @@ private class PythonInterpreter(
     pysparkJobProcessor.addFile(path)
   }
 
-  def addPyFile(driver: ReplDriver, conf: SparkConf, path: String): Unit = {
+  def addPyFile(driver: ReplDriver, conf: SparkConf, path: String): String = {
     val localCopyDir = new File(pysparkJobProcessor.getLocalTmpDirPath)
     val localCopyFile = driver.copyFileToLocal(localCopyDir, path, SparkContext.getOrCreate(conf))
     pysparkJobProcessor.addPyFile(localCopyFile.getPath)
     if (path.endsWith(".jar")) {
       driver.addLocalFileToClassLoader(localCopyFile)
     }
+    localCopyFile.getPath
   }
 
   private def updatePythonGatewayPort(port: Int): Unit = {
