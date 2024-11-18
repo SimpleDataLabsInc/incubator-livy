@@ -39,6 +39,14 @@ elif [[ "$SPARK_VERSION" =~ ^2.* ]]; then
   fi
   MAVEN_ARGS=""
   IMAGE_SPARK_SUFFIX="spark245"
+elif [[ "$SPARK_VERSION" =~ ^3.2.* ]]; then
+  SPARK_VERSION="3.2.0"
+  # option to overwrite scala version from command line
+  if [[ -z "$SCALA_VERSION" ]]; then
+    SCALA_VERSION="2.12"
+  fi
+  MAVEN_ARGS="-Pspark-3.0"
+  IMAGE_SPARK_SUFFIX="spark320"
 else
   SPARK_VERSION="3.0.0"
   SCALA_VERSION="2.12"
