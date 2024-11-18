@@ -38,7 +38,7 @@ RUN update-alternatives --install /usr/bin/python python /usr/local/bin/python3.
 RUN cp /usr/bin/python /usr/bin/python3
 
 # Install pip for Python3.7.3
-RUN curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
+RUN curl https://bootstrap.pypa.io/pip/3.7/get-pip.py -o get-pip.py
 RUN python get-pip.py
 RUN python -m pip install py4j
 #RUN python3 -m pip install --upgrade setuptools
