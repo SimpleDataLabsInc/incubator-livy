@@ -15,7 +15,7 @@
 #
 # Builds Docker image for livy
 
-FROM debian:stable
+FROM ubuntu:latest
 
 RUN apt-get update && apt-get install -yq --no-install-recommends \
     curl \
