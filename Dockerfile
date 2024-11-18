@@ -17,7 +17,7 @@
 
 FROM debian:stable
 
-RUN apt-get update && apt-get install -yq --no-install-recommends --force-yes \
+RUN apt-get update && apt-get install -yq --no-install-recommends \
     curl \
     git \
     openjdk-8-jdk \
