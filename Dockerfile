@@ -95,7 +95,7 @@ RUN cp ~/.m2/repository/com/microsoft/azure/azure-storage/$AZURE_SDK_VERSION/azu
 
 # RUN rm -rf /apps/apache-livy-0.8.0-incubating-SNAPSHOT-bin/jars/log4j-slf4j-impl-2.18.0.jar
 # Remove log4j2 and keep log4j1
-RUN rm -rf /apps/apache-livy-0.8.0-incubating-SNAPSHOT-bin/jars/log4j-core-2.18.0.jar /apps/apache-livy-0.8.0-incubating-SNAPSHOT-bin/jars/log4j-api-2.18.0.jar /apps/apache-livy-0.8.0-incubating-SNAPSHOT-bin/jars/log4j-1.2-api-2.18.0.jar
+RUN rm -rf /apps/apache-livy-0.8.0-incubating-SNAPSHOT-bin/jars/log4j-slf4j-impl-2.18.0.jar /apps/apache-livy-0.8.0-incubating-SNAPSHOT-bin/jars/log4j-core-2.18.0.jar /apps/apache-livy-0.8.0-incubating-SNAPSHOT-bin/jars/log4j-api-2.18.0.jar /apps/apache-livy-0.8.0-incubating-SNAPSHOT-bin/jars/log4j-1.2-api-2.18.0.jar
 
 EXPOSE 8998
 EXPOSE 11000
