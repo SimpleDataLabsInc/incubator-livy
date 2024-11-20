@@ -93,7 +93,7 @@ RUN cp ~/.m2/repository/com/amazonaws/aws-java-sdk/$AWS_SDK_VERSION/aws-java-sdk
 RUN cp ~/.m2/repository/org/apache/hadoop/hadoop-azure/$HADOOP_FULL_VERSION/hadoop-azure-$HADOOP_FULL_VERSION.jar $SPARK_HOME/jars/
 RUN cp ~/.m2/repository/com/microsoft/azure/azure-storage/$AZURE_SDK_VERSION/azure-storage-$AZURE_SDK_VERSION.jar $SPARK_HOME/jars/
 
-# RUN rm -rf /apps/apache-livy-0.8.0-incubating-SNAPSHOT-bin/jars/log4j-slf4j-impl-2.18.0.jar
+RUN python -m pip install pyspark==$SPARK_VERSION
 # Remove log4j2 and keep log4j1
 RUN rm -rf /apps/apache-livy-0.8.0-incubating-SNAPSHOT-bin/jars/log4j-slf4j-impl-2.18.0.jar /apps/apache-livy-0.8.0-incubating-SNAPSHOT-bin/jars/log4j-core-2.18.0.jar /apps/apache-livy-0.8.0-incubating-SNAPSHOT-bin/jars/log4j-api-2.18.0.jar /apps/apache-livy-0.8.0-incubating-SNAPSHOT-bin/jars/log4j-1.2-api-2.18.0.jar
 
