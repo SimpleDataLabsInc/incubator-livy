@@ -93,6 +93,7 @@ RUN cp ~/.m2/repository/com/amazonaws/aws-java-sdk/$AWS_SDK_VERSION/aws-java-sdk
 RUN cp ~/.m2/repository/org/apache/hadoop/hadoop-azure/$HADOOP_FULL_VERSION/hadoop-azure-$HADOOP_FULL_VERSION.jar $SPARK_HOME/jars/
 RUN cp ~/.m2/repository/com/microsoft/azure/azure-storage/$AZURE_SDK_VERSION/azure-storage-$AZURE_SDK_VERSION.jar $SPARK_HOME/jars/
 
+RUN rm -rf /apps/apache-livy-0.8.0-incubating-SNAPSHOT-bin/jars/slf4j-log4j12-1.7.10.jar
 
 EXPOSE 8998
 EXPOSE 11000
