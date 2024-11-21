@@ -16,13 +16,12 @@
 # Builds Docker image for livy
 
 FROM ubuntu:latest
-
 RUN apt-get update && apt-get install -yq --no-install-recommends \
     curl \
     git \
     openjdk-8-jdk \
     maven \
-    python3 python3-setuptools \
+    python3 python3-setuptools python3-pip \
     r-base \
     r-base-core \
     make build-essential libssl-dev zlib1g-dev libbz2-dev libreadline-dev libsqlite3-dev llvm libncurses5-dev  libncursesw5-dev xz-utils tk-dev \
@@ -30,19 +29,19 @@ RUN apt-get update && apt-get install -yq --no-install-recommends \
     procps wget curl telnet vim && \
     rm -rf /var/lib/apt/lists/*
 
-RUN curl -LJO https://www.python.org/ftp/python/3.7.3/Python-3.7.3.tar.xz && tar -xf Python-3.7.3.tar.xz
-#WORKDIR Python-3.7.3
-RUN cd Python-3.7.3 && ./configure --enable-optimizations && make -j 8 && make altinstall
+#RUN curl -LJO https://www.python.org/ftp/python/$PYTHON_VERSION/Python-$PYTHON_VERSION.tar.xz && tar -xf Python-$PYTHON_VERSION.tar.xz
+#WORKDIR Python-$PYTHON_VERSION
+#RUN cd Python-$PYTHON_VERSION && ./configure --enable-optimizations && make -j 8 && make altinstall
 
-RUN update-alternatives --install /usr/bin/python python /usr/local/bin/python3.7 3
-RUN cp /usr/bin/python /usr/bin/python3
+#RUN update-alternatives --install /usr/bin/python python /usr/local/bin/python3.7 3
+#RUN cp /usr/bin/python /usr/bin/python3
 
-# Install pip for Python3.7.3
-RUN curl https://bootstrap.pypa.io/pip/3.7/get-pip.py -o get-pip.py
-RUN python get-pip.py
-RUN python -m pip install py4j
+# Install pip for Python$PYTHON_VERSION
+#RUN curl https://bootstrap.pypa.io/pip/get-pip.py -o get-pip.py
+#RUN python3 get-pip.py
+#RUN python3 -m pip install py4j  --break-system-packages
 #RUN python3 -m pip install --upgrade setuptools
-
+RUN ln -s $(which python3) /usr/bin/python
 ENV PYTHONHASHSEED 0
 ENV PYTHONIOENCODING UTF-8
 ENV PIP_DISABLE_PIP_VERSION_CHECK 1
@@ -93,10 +92,8 @@ RUN cp ~/.m2/repository/com/amazonaws/aws-java-sdk/$AWS_SDK_VERSION/aws-java-sdk
 RUN cp ~/.m2/repository/org/apache/hadoop/hadoop-azure/$HADOOP_FULL_VERSION/hadoop-azure-$HADOOP_FULL_VERSION.jar $SPARK_HOME/jars/
 RUN cp ~/.m2/repository/com/microsoft/azure/azure-storage/$AZURE_SDK_VERSION/azure-storage-$AZURE_SDK_VERSION.jar $SPARK_HOME/jars/
 
-RUN python -m pip install pyspark==$SPARK_VERSION
 # Remove log4j2 and keep log4j1
 RUN rm -rf /apps/apache-livy-0.8.0-incubating-SNAPSHOT-bin/jars/log4j-slf4j-impl-2.18.0.jar /apps/apache-livy-0.8.0-incubating-SNAPSHOT-bin/jars/log4j-core-2.18.0.jar /apps/apache-livy-0.8.0-incubating-SNAPSHOT-bin/jars/log4j-api-2.18.0.jar /apps/apache-livy-0.8.0-incubating-SNAPSHOT-bin/jars/log4j-1.2-api-2.18.0.jar
-
 EXPOSE 8998
 EXPOSE 11000
 
