@@ -30,7 +30,7 @@ RUN apt-get update && apt-get install -yq --no-install-recommends \
 
 ENV PYTHON_VERSION 3.8.10
 RUN curl -LJO https://www.python.org/ftp/python/$PYTHON_VERSION/Python-$PYTHON_VERSION.tar.xz && tar -xf Python-$PYTHON_VERSION.tar.xz
-WORKDIR Python-$PYTHON_VERSION
+#WORKDIR Python-$PYTHON_VERSION
 RUN cd Python-$PYTHON_VERSION && ./configure --enable-optimizations && make -j 8 && make altinstall
 
 RUN update-alternatives --install /usr/bin/python python /usr/local/bin/python3.8 3
