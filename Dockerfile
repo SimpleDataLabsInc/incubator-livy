@@ -28,7 +28,7 @@ RUN apt-get update && apt-get install -yq --no-install-recommends \
     procps wget curl telnet vim && \
     rm -rf /var/lib/apt/lists/*
 
-ENV PYTHON_VERSION 3.9
+ENV PYTHON_VERSION 3.9.0
 RUN curl -LJO https://www.python.org/ftp/python/$PYTHON_VERSION/Python-$PYTHON_VERSION.tar.xz && tar -xf Python-$PYTHON_VERSION.tar.xz
 #WORKDIR Python-$PYTHON_VERSION
 RUN cd Python-$PYTHON_VERSION && ./configure --enable-optimizations && make -j 8 && make altinstall
