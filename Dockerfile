@@ -33,7 +33,7 @@ RUN curl -LJO https://www.python.org/ftp/python/$PYTHON_VERSION/Python-$PYTHON_V
 #WORKDIR Python-$PYTHON_VERSION
 RUN cd Python-$PYTHON_VERSION && ./configure --enable-optimizations && make -j 8 && make altinstall
 
-RUN update-alternatives --install /usr/bin/python python /usr/local/bin/python3.8 3
+RUN update-alternatives --install /usr/bin/python python /usr/local/bin/python3.9 3
 RUN cp /usr/bin/python /usr/bin/python3
 
 # Install pip for Python$PYTHON_VERSION
