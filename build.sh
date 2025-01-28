@@ -39,6 +39,14 @@ elif [[ "$SPARK_VERSION" =~ ^2.* ]]; then
   fi
   MAVEN_ARGS=""
   IMAGE_SPARK_SUFFIX="spark245"
+elif [[ "$SPARK_VERSION" =~ ^3.2.* ]]; then
+  SPARK_VERSION="3.2.0"
+  # option to overwrite scala version from command line
+  if [[ -z "$SCALA_VERSION" ]]; then
+    SCALA_VERSION="2.12"
+  fi
+  MAVEN_ARGS="-Pspark-3.0"
+  IMAGE_SPARK_SUFFIX="spark320"
 else
   SPARK_VERSION="3.0.0"
   SCALA_VERSION="2.12"
@@ -55,10 +63,10 @@ else
   echo "setting version in poms: $LIVY_VERSION"
   mvn versions:set $MAVEN_ARGS -DnewVersion="$LIVY_VERSION"
 fi
-mvn clean package install -B -V -e $MAVEN_ARGS -Pthriftserver -Dmaven.test.skip -DskipTests -Dmaven.javadoc.skip=true
+mvn package install -B -V -e $MAVEN_ARGS -Pthriftserver -Dmaven.test.skip -DskipTests -Dmaven.javadoc.skip=true
 rm -rf ./apache-livy*zip
 cp "assembly/target/apache-livy-${LIVY_VERSION}-bin.zip" ./
-IMAGE=133450206866.dkr.ecr.us-west-1.amazonaws.com/livy:v${LIVY_VERSION}-${IMAGE_SPARK_SUFFIX}
+IMAGE=133450206866.dkr.ecr.us-west-1.amazonaws.com/livy:v${LIVY_VERSION}-${IMAGE_SPARK_SUFFIX}_test
 docker build -t "$IMAGE" . --build-arg LIVY_VERSION="$LIVY_VERSION" --build-arg SPARK_VERSION=$SPARK_VERSION
 docker push "$IMAGE"
 mvn versions:revert
