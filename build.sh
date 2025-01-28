@@ -66,7 +66,7 @@ fi
 mvn package install -B -V -e $MAVEN_ARGS -Pthriftserver -Dmaven.test.skip -DskipTests -Dmaven.javadoc.skip=true
 rm -rf ./apache-livy*zip
 cp "assembly/target/apache-livy-${LIVY_VERSION}-bin.zip" ./
-IMAGE=133450206866.dkr.ecr.us-west-1.amazonaws.com/livy:v${LIVY_VERSION}-${IMAGE_SPARK_SUFFIX}
+IMAGE=133450206866.dkr.ecr.us-west-1.amazonaws.com/livy:v${LIVY_VERSION}-${IMAGE_SPARK_SUFFIX}_test
 docker build -t "$IMAGE" . --build-arg LIVY_VERSION="$LIVY_VERSION" --build-arg SPARK_VERSION=$SPARK_VERSION
 docker push "$IMAGE"
 mvn versions:revert
