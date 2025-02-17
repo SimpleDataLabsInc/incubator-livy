@@ -31,3 +31,4 @@ python-api/dist
 .eggs
 *.egg-info
 *.egg
+/apache-livy-0.8.0-incubating-SNAPSHOT-bin.zip
