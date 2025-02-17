@@ -16,6 +16,9 @@
 #
 # Builds Docker image for livy
 set -e
+
+HADOOP_VERSION=hadoop2.7
+
 if [[ -z "$SPARK_VERSION" ]]; then
   if [[ -z "$1" ]]; then
     echo "Please provide spark version as first argument"
@@ -55,6 +58,7 @@ elif [[ "$SPARK_VERSION" =~ ^3.3.* ]]; then
   fi
   MAVEN_ARGS="-Pspark-3.0"
   IMAGE_SPARK_SUFFIX="spark330"
+  HADOOP_VERSION="hadoop3"
 elif [[ "$SPARK_VERSION" =~ ^3.4.* ]]; then
   SPARK_VERSION="3.4.0"
   # option to overwrite scala version from command line
@@ -63,6 +67,7 @@ elif [[ "$SPARK_VERSION" =~ ^3.4.* ]]; then
   fi
   MAVEN_ARGS="-Pspark-3.0"
   IMAGE_SPARK_SUFFIX="spark340"
+  HADOOP_VERSION="hadoop3"
 elif [[ "$SPARK_VERSION" =~ ^3.5.* ]]; then
   SPARK_VERSION="3.5.0"
   # option to overwrite scala version from command line
@@ -71,6 +76,7 @@ elif [[ "$SPARK_VERSION" =~ ^3.5.* ]]; then
   fi
   MAVEN_ARGS="-Pspark-3.0"
   IMAGE_SPARK_SUFFIX="spark350"
+  HADOOP_VERSION="hadoop3"
 else
   SPARK_VERSION="3.0.0"
   SCALA_VERSION="2.12"
@@ -91,6 +97,6 @@ mvn package install -B -V -e $MAVEN_ARGS -Pthriftserver -Dmaven.test.skip -Dskip
 rm -rf ./apache-livy*zip
 cp "assembly/target/apache-livy-${LIVY_VERSION}-bin.zip" ./
 IMAGE=133450206866.dkr.ecr.us-west-1.amazonaws.com/livy:v${LIVY_VERSION}-${IMAGE_SPARK_SUFFIX}
-docker build -t "$IMAGE" . --build-arg LIVY_VERSION="$LIVY_VERSION" --build-arg SPARK_VERSION=$SPARK_VERSION
+docker build -t "$IMAGE" . --build-arg LIVY_VERSION="$LIVY_VERSION" --build-arg SPARK_VERSION=$SPARK_VERSION --build-arg HADOOP_VERSION=$HADOOP_VERSION
 docker push "$IMAGE"
 mvn versions:revert
