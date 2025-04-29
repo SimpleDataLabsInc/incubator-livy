@@ -19,7 +19,7 @@ FROM ubuntu:latest
 RUN apt-get update && apt-get install -yq --no-install-recommends \
     curl \
     git \
-    openjdk-8-jdk \
+    openjdk-17-jdk \
     maven \
     r-base \
     r-base-core \
