@@ -20,6 +20,7 @@ package org.apache.livy.sessions
 import java.io.InputStream
 import java.net.{URI, URISyntaxException}
 import java.security.PrivilegedExceptionAction
+import java.util.concurrent.{Executors, LinkedBlockingQueue, ThreadFactory, ThreadPoolExecutor, TimeUnit}
 import java.util.UUID
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -33,6 +34,9 @@ import org.apache.livy.utils.AppInfo
 
 object Session {
   trait RecoveryMetadata { val id: Int }
+
+  val BLACKLIST_CUSTOM_CLASSPATH: Set[String] = Set("spark.submit.deployMode",
+    "spark.submit.proxyUser.allowCustomClasspathInClusterMode")
 
   lazy val configBlackList: Set[String] = {
     val url = getClass.getResource("/spark-blacklist.conf")
@@ -58,7 +62,11 @@ object Session {
       return Map()
     }
 
-    val errors = conf.keySet.filter(configBlackList.contains)
+    val errors = if (livyConf.getBoolean(LivyConf.SESSION_ALLOW_CUSTOM_CLASSPATH)) {
+      conf.keySet.filter(configBlackList.contains)
+    } else {
+      conf.keySet.filter((configBlackList ++ BLACKLIST_CUSTOM_CLASSPATH).contains)
+    }
     if (errors.nonEmpty) {
       throw new IllegalArgumentException(
         "Blacklisted configuration values in session config: " + errors.mkString(", "))
@@ -134,14 +142,52 @@ object Session {
   }
 }
 
+class NamedThreadFactory(prefix: String) extends ThreadFactory {
+  private val defaultFactory = Executors.defaultThreadFactory()
+
+  override def newThread(r: Runnable): Thread = {
+    val thread = defaultFactory.newThread(r)
+    thread.setName(prefix + "-" + thread.getName)
+    thread
+  }
+}
+
 abstract class Session(
     val id: Int,
     val name: Option[String],
     val owner: String,
+    val ttl: Option[String],
+    val idleTimeout: Option[String],
     val livyConf: LivyConf)
   extends Logging {
 
+  def this(id: Int,
+   name: Option[String],
+   owner: String,
+   livyConf: LivyConf) {
+    this(id, name, owner, None, None, livyConf)
+  }
+
   import Session._
+
+  protected val sessionManageExecutors: ExecutionContext = {
+    val poolSize = livyConf.getInt(LivyConf.SESSION_MANAGE_THREADS)
+    val poolQueueSize = livyConf.getInt(LivyConf.SESSION_MANAGE_WAIT_QUEUE_SIZE)
+    val keepAliveTime = livyConf.getTimeAsMs(
+      LivyConf.SESSION_MANAGE_KEEPALIVE_TIME) / 1000
+    debug(s"Background session manage executors with size=${poolSize}," +
+      s" wait queue size= ${poolQueueSize}, keepalive time ${keepAliveTime} seconds")
+    val queue = new LinkedBlockingQueue[Runnable](poolQueueSize)
+    val executor = new ThreadPoolExecutor(
+      poolSize,
+      poolSize,
+      keepAliveTime,
+      TimeUnit.SECONDS,
+      queue,
+      new NamedThreadFactory("LivyServer2-SessionManageExecutors"))
+    executor.allowCoreThreadTimeOut(true)
+    ExecutionContext.fromExecutorService(executor)
+  }
 
   protected implicit val executionContext = ExecutionContext.global
 
@@ -156,6 +202,8 @@ abstract class Session(
 
   private var _lastActivity = System.nanoTime()
 
+  var startedOn : Option[Long] = None
+
   // Directory where the session's staging files are created. The directory is only accessible
   // to the session's effective user.
   private var stagingDir: Path = null
@@ -163,6 +211,7 @@ abstract class Session(
   def appId: Option[String] = _appId
 
   var appInfo: AppInfo = AppInfo()
+
 
   def lastActivity: Long = state match {
     case SessionState.Error(time) => time
@@ -183,7 +232,7 @@ abstract class Session(
 
   def start(): Unit
 
-  def stop(): Future[Unit] = Future {
+  def stop(): Future[AnyVal] = Future {
     try {
       info(s"Stopping $this...")
       stopSession()
@@ -209,7 +258,7 @@ abstract class Session(
       case e: Exception =>
         warn(s"Error cleaning up session $id staging dir.", e)
     }
-  }
+  }(sessionManageExecutors)
 
 
   override def toString(): String = s"${this.getClass.getSimpleName} $id"
