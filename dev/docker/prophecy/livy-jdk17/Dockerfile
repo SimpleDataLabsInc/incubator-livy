@@ -30,7 +30,7 @@ RUN sed -i \
     livy/pom.xml
 
 # 1‑c. compile (Spark‑3 profile, skip tests)
-RUN mvn -T1C -f livy -Pspark-3.0 -DskipTests -DskipITs -pl '!python-api' -am clean package
+RUN mvn -T1C -f livy -Pspark3 -DskipTests -DskipITs -pl '!python-api,!coverage,!examples' -am clean package
 
 ##########################
 # Stage 2 – runtime
