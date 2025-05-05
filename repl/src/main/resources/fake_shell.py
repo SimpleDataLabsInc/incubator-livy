@@ -40,6 +40,14 @@ else:
     import cStringIO
     import StringIO
 
+if sys.version_info > (3,8):
+    from ast import Module
+else :
+    # mock the new API, ignore second argument
+    # see https://github.com/ipython/ipython/issues/11590
+    from ast import Module as OriginalModule
+    Module = lambda nodelist, type_ignores: OriginalModule(nodelist)
+
 logging.basicConfig()
 LOG = logging.getLogger('fake_shell')
 
@@ -584,8 +592,11 @@ def main():
             java_import(gateway.jvm, "org.apache.spark.SparkConf")
             java_import(gateway.jvm, "org.apache.spark.api.java.*")
             java_import(gateway.jvm, "org.apache.spark.api.python.*")
+            java_import(gateway.jvm, "org.apache.spark.ml.python.*")
             java_import(gateway.jvm, "org.apache.spark.mllib.api.python.*")
+            java_import(gateway.jvm, "org.apache.spark.resource.*")
             java_import(gateway.jvm, "org.apache.spark.sql.*")
+            java_import(gateway.jvm, "org.apache.spark.sql.api.python.*")
             java_import(gateway.jvm, "org.apache.spark.sql.hive.*")
             java_import(gateway.jvm, "scala.Tuple2")
 

@@ -21,6 +21,7 @@ import org.apache.spark.SparkConf
 import org.json4s.{DefaultFormats, JNull, JValue}
 import org.json4s.JsonDSL._
 import org.scalatest._
+import org.scalatest.Inside.inside
 
 import org.apache.livy.rsc.driver.SparkEntries
 import org.apache.livy.sessions._
@@ -228,16 +229,16 @@ abstract class PythonBaseInterpreterSpec extends BaseInterpreterSpec {
         |'
       """.stripMargin)
 
-    response should equal(Interpreter.ExecuteError(
-      "SyntaxError",
-      "EOL while scanning string literal (<stdin>, line 2)",
-      List(
-        "  File \"<stdin>\", line 2\n",
-        "    '\n",
-        "    ^\n",
-        "SyntaxError: EOL while scanning string literal\n"
-      )
-    ))
+    inside (response) {
+      case Interpreter.ExecuteError(ename, evalue, traceback) => {
+        ename shouldBe "SyntaxError"
+        evalue should (startWith("EOL while scanning string literal")
+          or startWith("unterminated string literal"))
+        traceback.last should (startWith("SyntaxError: EOL while scanning string literal")
+          or startWith("SyntaxError: unterminated string literal"))
+      }
+      case _ => fail()
+    }
 
     response = intp.execute("x")
     response should equal(Interpreter.ExecuteError(
@@ -248,6 +249,32 @@ abstract class PythonBaseInterpreterSpec extends BaseInterpreterSpec {
         "NameError: name 'x' is not defined\n"
       )
     ))
+  }
+
+  it should "work when interpreter exit with json stdout" in {
+    noException should be thrownBy {
+      withInterpreter { intp =>
+        val response = intp.execute(
+          """import atexit, sys
+            |atexit.register(sys.stdout.write, '{}')
+            |""".stripMargin
+        )
+        response shouldBe a[Interpreter.ExecuteSuccess]
+      }
+    }
+  }
+
+  it should "work when interpreter exit with non-json stdout" in {
+    noException should be thrownBy {
+      withInterpreter { intp =>
+        val response = intp.execute(
+          """import atexit, sys
+            |atexit.register(sys.stdout.write, 'line1\nline2')
+            |""".stripMargin
+        )
+        response shouldBe a[Interpreter.ExecuteSuccess]
+      }
+    }
   }
 }
 
