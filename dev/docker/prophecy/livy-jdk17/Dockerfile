@@ -12,9 +12,9 @@ ARG SCALA_BINARY=2.12
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        python3.10 python3.10-distutils python3-pip python3.10-venv && \
+        build-essential libkrb5-dev python3.10 python3.10-distutils python3-pip python3.10-venv && \
     ln -s /usr/bin/python3.10 /usr/bin/python && \
-    python3.10 -m pip install --no-cache-dir --upgrade pip setuptools wheel && \
+    python3.10 -m pip install --no-cache-dir --upgrade pip Cython==0.29.37 'setuptools<66' wheel && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
@@ -30,10 +30,7 @@ RUN sed -i \
     livy/pom.xml
 
 # 1‑c. compile (Spark‑3 profile, skip tests)
-RUN mvn -T1C -f livy \
-    -Pspark3 -DskipTests -DskipITs \
-    clean package
-
+RUN mvn -T1C -f livy -Pspark-3.0 -DskipTests -DskipITs -pl '!python-api' -am clean package
 
 ##########################
 # Stage 2 – runtime
