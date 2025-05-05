@@ -83,8 +83,8 @@
     <slf4j.version>1.7.36</slf4j.version>
     <reload4j.version>1.2.25</reload4j.version>
     <spark.scala-2.11.version>2.4.5</spark.scala-2.11.version>
-    <spark.scala-2.12.version>2.4.5</spark.scala-2.12.version>
-    <spark.version>${spark.scala-2.11.version}</spark.version>
+    <spark.scala-2.12.version>3.4.0</spark.scala-2.12.version>
+    <spark.version>${spark.scala-2.12.version}</spark.version>
     <kubernetes.client.version>5.6.0</kubernetes.client.version>
     <hive.version>3.0.0</hive.version>
     <commons-codec.version>1.9</commons-codec.version>
@@ -101,29 +101,29 @@
     <mockito.version>1.10.19</mockito.version>
     <netty.version>4.1.86.Final</netty.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <py4j.version>0.10.7</py4j.version>
+    <py4j.version>0.10.9.7</py4j.version>
     <scala-2.11.version>2.11.12</scala-2.11.version>
     <scala-2.12.version>2.12.15</scala-2.12.version>
-    <scala.binary.version>2.11</scala.binary.version>
-    <scala.version>${scala-2.11.version}</scala.version>
+    <scala.binary.version>2.12</scala.binary.version>
+    <scala.version>${scala-2.12.version}</scala.version>
     <scalatest.version>3.0.8</scalatest.version>
     <scalatra.version>2.6.5</scalatra.version>
-    <java.version>1.8</java.version>
+    <java.version>17</java.version>
     <test.redirectToFile>true</test.redirectToFile>
     <execution.root>${user.dir}</execution.root>
     <spark.home>${execution.root}/dev/spark</spark.home>
     <!-- profile controlled parameters, we are setting the defaults here so we can run "mvn package" with default profile values -->
-    <!-- hadoop2 -->
-    <hadoop.major-minor.version>2.7</hadoop.major-minor.version>
-    <hadoop.version>2.7.3</hadoop.version>
-    <!-- scala2.11 -->
-    <scala.binary.version>2.11</scala.binary.version>
-    <scala.version>2.11.12</scala.version>
-    <!-- spark2 -->
-    <spark.version>2.4.5</spark.version>
-    <java.version>1.8</java.version>
-    <py4j.version>0.10.9</py4j.version>
-    <json4s.version>3.5.3</json4s.version>
+    <!-- hadoop3 -->
+    <hadoop.major-minor.version>3.3</hadoop.major-minor.version>
+    <hadoop.version>3.3.4</hadoop.version>
+    <!-- scala2.12 -->
+    <scala.binary.version>2.12</scala.binary.version>
+    <scala.version>2.12.15</scala.version>
+    <!-- spark3 -->
+    <spark.version>3.4.0</spark.version>
+    <java.version>17</java.version>
+    <py4j.version>0.10.9.7</py4j.version>
+    <json4s.version>3.7.0-M11</json4s.version>
     <spark.bin.name>spark-${spark.version}-bin-hadoop${hadoop.major-minor.version}</spark.bin.name>
     <spark.bin.download.url>
       https://archive.apache.org/dist/spark/spark-${spark.version}/${spark.bin.name}.tgz
@@ -217,8 +217,6 @@
     <module>client-common</module>
     <module>client-http</module>
     <module>core</module>
-    <module>core/scala-2.11</module>
-    <module>core/scala-2.12</module>
     <module>core/scala-${scala.binary.version}</module>
     <module>coverage</module>
     <module>examples</module>
@@ -688,6 +686,12 @@
         <groupId>org.scala-lang</groupId>
         <artifactId>scala-compiler</artifactId>
         <version>${scala.version}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>org.slf4j</groupId>
+        <artifactId>slf4j-reload4j</artifactId>
+        <version>${slf4j.version}</version>
       </dependency>
 
       <dependency>
@@ -1274,8 +1278,8 @@
     <profile>
       <id>spark3</id>
       <properties>
-        <spark.version>3.2.3</spark.version>
-        <java.version>1.8</java.version>
+        <spark.version>3.4.0</spark.version>
+        <java.version>17</java.version>
         <py4j.version>0.10.9.7</py4j.version>
         <json4s.version>3.7.0-M11</json4s.version>
         <netty.version>4.1.92.Final</netty.version>
