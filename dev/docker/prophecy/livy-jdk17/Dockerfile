@@ -19,10 +19,9 @@ RUN apt-get update && \
 
 WORKDIR /build
 
-RUN git clone --depth 1 --single-branch --branch "${LIVY_BRANCH}" \
-    "${LIVY_GIT}" livy
+RUN git clone --depth 1 --single-branch --branch "${LIVY_BRANCH}" "${LIVY_GIT}" livy
 
-RUN mvn -T1C -f livy -Pspark3 -DskipTests -DskipITs -pl '!python-api,!coverage,!examples' -am clean package
+RUN mvn -T1C -f livy -Pspark3.4-java17 -DskipTests -DskipITs -pl '!python-api,!coverage,!examples' -am clean package
 
 ##########################
 # Stage 2 – runtime
@@ -35,21 +34,24 @@ ENV LIVY_HOME=/opt/livy \
     PYSPARK_PYTHON=/usr/bin/python3.10 \
     PYSPARK_DRIVER_PYTHON=/usr/bin/python3.10 \
     PATH="/opt/livy/bin:/opt/spark/bin:${PATH}" \
-    # Ensure Spark also uses Java 17 correctly
     SPARK_OPTS="--add-opens java.base/java.lang.invoke=ALL-UNNAMED --add-opens java.base/java.util.regex=ALL-UNNAMED"
 
+# Single block for all OS dependencies
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-    python3.10 python3-pip wget curl tini procps zip unzip && \
+    python3.10 \
+    python3-pip \
+    wget \
+    curl \
+    tini \
+    procps \
+    zip \
+    unzip && \
+    # Ensure python3.10 is the default python if scripts rely on /usr/bin/python
     ln -s /usr/bin/python3.10 /usr/bin/python && \
     rm -rf /var/lib/apt/lists/*
 
-# base OS deps
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends python3 wget curl tini procps zip unzip && \
-    rm -rf /var/lib/apt/lists/*
-
-# Spark binaries
+# Single block for Spark binaries
 ARG SPARK_VERSION=3.4.0
 RUN wget -qO- https://archive.apache.org/dist/spark/spark-${SPARK_VERSION}/spark-${SPARK_VERSION}-bin-hadoop3.tgz \
     | tar -xz -C /opt && \
