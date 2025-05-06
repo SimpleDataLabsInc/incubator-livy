@@ -1192,11 +1192,6 @@
 
     <profile>
       <id>spark3</id>
-      <modules>
-        <module>thriftserver/server</module>
-        <module>thriftserver/session</module>
-        <module>thriftserver/client</module>
-      </modules>
       <properties>
         <spark.version>3.2.3</spark.version>
         <java.version>1.8</java.version>
@@ -1214,6 +1209,11 @@
 
     <profile>
       <id>spark3.4-java17</id>
+      <modules>
+        <module>thriftserver/server</module>
+        <module>thriftserver/session</module>
+        <module>thriftserver/client</module>
+      </modules>
       <properties>
         <scala.binary.version>2.12</scala.binary.version>
         <scala.version>2.12.17</scala.version>
