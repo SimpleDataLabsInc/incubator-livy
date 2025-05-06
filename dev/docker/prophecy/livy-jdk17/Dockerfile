@@ -51,19 +51,6 @@ RUN apt-get update && \
     ln -s /usr/bin/python3.10 /usr/bin/python && \
     rm -rf /var/lib/apt/lists/*
 
-# Single block for Spark binaries
-ARG SPARK_VERSION=3.4.0
-RUN wget -qO- https://archive.apache.org/dist/spark/spark-${SPARK_VERSION}/spark-${SPARK_VERSION}-bin-hadoop3.tgz \
-    | tar -xz -C /opt && \
-    mv /opt/spark-${SPARK_VERSION}-bin-hadoop3 ${SPARK_HOME}
-
-# Base OS deps + Python 3.10 needed at runtime for PySpark sessions
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-    python3.10 \
-    wget curl tini procps zip unzip && \
-    rm -rf /var/lib/apt/lists/*
-
 # Spark binaries (using pre-built with Hadoop 3)
 ARG SPARK_VERSION=3.4.0
 RUN wget -qO- https://archive.apache.org/dist/spark/spark-${SPARK_VERSION}/spark-${SPARK_VERSION}-bin-hadoop3.tgz \
