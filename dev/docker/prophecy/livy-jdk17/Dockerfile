@@ -34,7 +34,7 @@ ENV LIVY_HOME=/opt/livy \
     PYSPARK_PYTHON=/usr/bin/python3.10 \
     PYSPARK_DRIVER_PYTHON=/usr/bin/python3.10 \
     PATH="/opt/livy/bin:/opt/spark/bin:${PATH}" \
-    SPARK_OPTS="--add-opens java.base/java.lang.invoke=ALL-UNNAMED --add-opens java.base/java.util.regex=ALL-UNNAMED"
+    SPARK_OPTS="--add-opens java.base/java.lang.invoke=ALL-UNNAMED --add-opens java.base/java.util.regex=ALL-UNNAMED --add-opens java.base/java.util.concurrent.atomic=ALL-UNNAMED"
 
 # Single block for all OS dependencies
 RUN apt-get update && \
@@ -64,12 +64,14 @@ RUN mkdir -p ${LIVY_HOME} && \
     mv /opt/apache-livy-*/* ${LIVY_HOME} && \
     rm /tmp/livy.zip
 
+RUN mkdir -p ${LIVY_HOME}/logs
+
 # minimal configs
 RUN mkdir -p ${LIVY_HOME}/conf
 RUN echo "export SPARK_HOME=${SPARK_HOME}" >  ${LIVY_HOME}/conf/livy-env.sh && \
     echo "export PYSPARK_PYTHON=${PYSPARK_PYTHON}" >> ${LIVY_HOME}/conf/livy-env.sh && \
     echo "export PYSPARK_DRIVER_PYTHON=${PYSPARK_DRIVER_PYTHON}" >> ${LIVY_HOME}/conf/livy-env.sh && \
-    echo 'export LIVY_SERVER_JAVA_OPTS="--add-opens java.base/java.lang.invoke=ALL-UNNAMED --add-opens java.base/java.util.regex=ALL-UNNAMED"' \
+    echo 'export LIVY_SERVER_JAVA_OPTS="--add-opens java.base/java.lang.invoke=ALL-UNNAMED --add-opens java.base/java.util.regex=ALL-UNNAMED --add-opens java.base/java.util.concurrent.atomic=ALL-UNNAMED"' \
     >> ${LIVY_HOME}/conf/livy-env.sh
 
 RUN { \
