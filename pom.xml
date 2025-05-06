@@ -1217,7 +1217,10 @@
         <py4j.version>0.10.9.7</py4j.version>
         <json4s.version>3.7.0-M11</json4s.version>
         <netty.version>4.1.87.Final</netty.version>
-        <spark.bin.name>spark-${spark.version}-bin-hadoop${hadoop.major-minor.version}</spark.bin.name>
+        <hadoop.version>3.3.4</hadoop.version>
+        <hadoop.major-minor.version>3.3</hadoop.major-minor.version>
+        <hadoop.major.version>3</hadoop.major.version>
+        <spark.bin.name>spark-${spark.version}-bin-hadoop${hadoop.major.version}</spark.bin.name>
         <spark.bin.download.url>
           https://archive.apache.org/dist/spark/spark-${spark.version}/${spark.bin.name}.tgz
         </spark.bin.download.url>
