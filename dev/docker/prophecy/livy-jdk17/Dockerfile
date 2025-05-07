@@ -76,6 +76,8 @@ RUN { \
       echo 'livy.spark.master = local[*]'; \
       echo 'livy.spark.deploy-mode = client'; \
       echo 'livy.server.host = 0.0.0.0'; \
+      echo 'livy.file.local-dir-whitelist = /app/common/qa_python/,/tmp/,/storage/'; \
+      echo 'livy.spark.driver.extraJavaOptions = --add-opens java.base/java.lang.invoke=ALL-UNNAMED --add-opens java.base/java.util.regex=ALL-UNNAMED --add-opens java.base/java.util.concurrent.atomic=ALL-UNNAMED'; \
     } > ${LIVY_HOME}/conf/livy.conf
 
 # Add default log4j properties to avoid warnings
