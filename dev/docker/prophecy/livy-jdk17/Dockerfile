@@ -28,16 +28,16 @@ FROM openjdk:17-jdk-slim
 
 ENV LIVY_HOME=/opt/livy \
     SPARK_HOME=/opt/spark \
-    PYTHON_VERSION=3.9 \
-    PYSPARK_PYTHON=/usr/bin/python3.9 \
-    PYSPARK_DRIVER_PYTHON=/usr/bin/python3.9 \
+    PYTHON_VERSION=3.12 \
+    PYSPARK_PYTHON=/usr/bin/python3.12 \
+    PYSPARK_DRIVER_PYTHON=/usr/bin/python3.12 \
     PATH="/opt/livy/bin:/opt/spark/bin:${PATH}" \
     SPARK_OPTS="--add-opens java.base/java.lang.invoke=ALL-UNNAMED --add-opens java.base/java.util.regex=ALL-UNNAMED --add-opens java.base/java.util.concurrent.atomic=ALL-UNNAMED"
 
 # Single block for all OS dependencies
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-    python3.9 \
+    python3.12 \
     python3-pip \
     wget \
     curl \
@@ -45,8 +45,8 @@ RUN apt-get update && \
     procps \
     zip \
     unzip && \
-    # Ensure python3.9 is the default python if scripts rely on /usr/bin/python
-    ln -s /usr/bin/python3.9 /usr/bin/python && \
+    # Ensure python3.12 is the default python if scripts rely on /usr/bin/python
+    ln -s /usr/bin/python3.12 /usr/bin/python && \
     rm -rf /var/lib/apt/lists/*
 
 # Spark binaries (using pre-built with Hadoop 3)
