@@ -24,7 +24,7 @@ RUN mvn -T1C -f livy -Pspark3.4-java17 -DskipTests -DskipITs -pl '!python-api,!c
 ##########################
 # Stage 2 – runtime
 ##########################
-FROM openjdk:17-jdk-slim
+FROM eclipse-temurin:17-jdk-jammy
 
 ENV LIVY_HOME=/opt/livy \
     SPARK_HOME=/opt/spark \
