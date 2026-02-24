@@ -28,6 +28,20 @@ ARG LIVY_BRANCH=prophecy-master-refresh
 RUN git clone --depth 1 --branch ${LIVY_BRANCH} ${LIVY_REPO} /build/livy
 WORKDIR /build/livy
 
+ARG LIVY_VERSION=0.10.0-incubating-SNAPSHOT
+
+# Pre-install a placeholder test-jar for livy-core so that repl's
+# test-scoped dependency resolves when -Dmaven.test.skip=true is used.
+RUN mkdir -p /tmp/empty-classes && \
+    jar cf /tmp/empty-tests.jar -C /tmp/empty-classes . && \
+    mvn install:install-file -q \
+      -Dfile=/tmp/empty-tests.jar \
+      -DgroupId=org.apache.livy \
+      -DartifactId=livy-core_${SCALA_VERSION} \
+      -Dversion=${LIVY_VERSION} \
+      -Dpackaging=jar \
+      -Dclassifier=tests
+
 RUN if [ "${SCALA_VERSION}" = "2.13" ]; then \
       mvn clean package -Pscala-2.13 -Pspark3 \
         -DskipTests -DskipITs -Dmaven.test.skip=true -Drat.skip=true -q; \
