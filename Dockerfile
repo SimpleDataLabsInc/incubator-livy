@@ -15,6 +15,9 @@
 #
 # Standalone all-in-one Docker image for Livy.
 # Clones the repo and builds Livy from source inside the container.
+# Supports both Spark 3.x (Scala 2.12, JDK 8) and Spark 4.x (Scala 2.13, JDK 17).
+#
+# Java version and Spark tarball naming are auto-derived from SPARK_VERSION.
 #
 # Usage:
 #   Spark 3 + Scala 2.12 (default):
@@ -22,85 +25,123 @@
 #
 #   Spark 4 + Scala 2.13:
 #     docker build -t livy \
-#       --build-arg JAVA_VERSION=17 \
-#       --build-arg SPARK_VERSION=4.0.0 \
-#       --build-arg SPARK_SUFFIX=hadoop3 \
+#       --build-arg SPARK_VERSION=4.0.2 \
 #       --build-arg SCALA_VERSION=2.13 .
+#
+#   Custom repo/branch:
+#     docker build -t livy \
+#       --build-arg SPARK_VERSION=4.0.2 \
+#       --build-arg SCALA_VERSION=2.13 \
+#       --build-arg LIVY_REPO=https://github.com/your-org/incubator-livy.git \
+#       --build-arg LIVY_BRANCH=your-branch .
 
 # ============================================================
 # Stage 1: Build Livy from source
 # ============================================================
-FROM debian:stable AS builder
+FROM ubuntu:noble AS builder
 
-ARG JAVA_VERSION=8
+ARG SPARK_VERSION=3.5.6
 ARG SCALA_VERSION=2.12
+ARG LIVY_VERSION=0.10.0-incubating-SNAPSHOT
 ARG LIVY_REPO=https://github.com/SimpleDataLabsInc/incubator-livy.git
 ARG LIVY_BRANCH=prophecy-master-refresh
 
-RUN apt-get update && apt-get install -yq --no-install-recommends \
-    curl \
-    git \
-    openjdk-${JAVA_VERSION}-jdk-headless \
-    maven \
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install JDK (8 for Spark 3.x, 17 for Spark 4.x) + build tools
+RUN SPARK_MAJOR=$(echo "${SPARK_VERSION}" | cut -d. -f1) && \
+    if [ "$SPARK_MAJOR" -ge 4 ]; then JV=17; else JV=8; fi && \
+    apt-get update && apt-get install -yq --no-install-recommends \
+      curl git maven python3 \
+      openjdk-${JV}-jdk-headless \
+    && ARCH=$(dpkg --print-architecture) \
+    && ln -s /usr/lib/jvm/java-${JV}-openjdk-${ARCH} /usr/lib/jvm/java-current \
+    && ln -sf /usr/bin/python3 /usr/bin/python \
     && rm -rf /var/lib/apt/lists/*
+
+ENV JAVA_HOME=/usr/lib/jvm/java-current
 
 RUN git clone --depth 1 --branch ${LIVY_BRANCH} ${LIVY_REPO} /build/livy
 WORKDIR /build/livy
 
+# Placeholder test-jar so repl's test-scoped dependency on
+# livy-core_<scala> resolves when test compilation is skipped.
+RUN mkdir -p /tmp/empty-classes && \
+    jar cf /tmp/empty-tests.jar -C /tmp/empty-classes . && \
+    mvn install:install-file -q \
+      -Dfile=/tmp/empty-tests.jar \
+      -DgroupId=org.apache.livy \
+      -DartifactId=livy-core_${SCALA_VERSION} \
+      -Dversion=${LIVY_VERSION} \
+      -Dpackaging=jar \
+      -Dclassifier=tests
+
 RUN if [ "${SCALA_VERSION}" = "2.13" ]; then \
       mvn clean package -Pscala-2.13 -Pspark3 \
-        -DskipTests -DskipITs -Drat.skip=true -Dmaven.test.skip=true -q; \
+        -pl '!coverage,!python-api' \
+        -DskipTests -DskipITs -Dmaven.test.skip=true -Drat.skip=true -q; \
     else \
       mvn clean package -Pscala-2.12 -Pspark3 \
-        -DskipTests -DskipITs -Drat.skip=true -Dmaven.test.skip=true -q; \
+        -pl '!coverage,!python-api' \
+        -DskipTests -DskipITs -Dmaven.test.skip=true -Drat.skip=true -q; \
     fi
 
 # ============================================================
 # Stage 2: Runtime image
 # ============================================================
-FROM debian:stable
+FROM ubuntu:noble
 
-ARG JAVA_VERSION=8
+ARG SPARK_VERSION=3.5.6
 ARG SCALA_VERSION=2.12
 ARG LIVY_VERSION=0.10.0-incubating-SNAPSHOT
-ARG SPARK_VERSION=3.2.3
-# SPARK_SUFFIX: "without-hadoop" for Spark 3.x, "hadoop3" for Spark 4.x
-ARG SPARK_SUFFIX=without-hadoop
 
-RUN apt-get update && apt-get install -yq --no-install-recommends \
-    curl \
-    openjdk-${JAVA_VERSION}-jre-headless \
-    python3 python3-pip \
-    procps wget unzip \
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install JRE (8 for Spark 3.x, 17 for Spark 4.x) + runtime deps
+RUN SPARK_MAJOR=$(echo "${SPARK_VERSION}" | cut -d. -f1) && \
+    if [ "$SPARK_MAJOR" -ge 4 ]; then JV=17; else JV=8; fi && \
+    apt-get update && apt-get install -yq --no-install-recommends \
+      curl wget unzip procps tini \
+      python3 python3-pip \
+      openjdk-${JV}-jre-headless \
+    && ARCH=$(dpkg --print-architecture) \
+    && ln -s /usr/lib/jvm/java-${JV}-openjdk-${ARCH} /usr/lib/jvm/java-current \
+    && ln -sf /usr/bin/python3 /usr/bin/python \
     && rm -rf /var/lib/apt/lists/*
 
 RUN python3 -m pip install --break-system-packages py4j 2>/dev/null \
     || python3 -m pip install py4j
 
+ENV JAVA_HOME=/usr/lib/jvm/java-current
 ENV PYTHONHASHSEED=0
 ENV PYTHONIOENCODING=UTF-8
 
 # ---- Spark ----
+# Spark 3.x tarballs: spark-<ver>-bin-without-hadoop.tgz
+# Spark 4.x tarballs: spark-<ver>-bin-hadoop3.tgz
 ENV SPARK_HOME=/apps/spark
-ENV PATH="${PATH}:${SPARK_HOME}/bin/"
+ENV PATH="${PATH}:${SPARK_HOME}/bin"
 
-RUN mkdir -p /apps && cd /apps && \
-    wget -q https://archive.apache.org/dist/spark/spark-${SPARK_VERSION}/spark-${SPARK_VERSION}-bin-${SPARK_SUFFIX}.tgz && \
-    tar -xzf spark-${SPARK_VERSION}-bin-${SPARK_SUFFIX}.tgz && \
-    ln -s /apps/spark-${SPARK_VERSION}-bin-${SPARK_SUFFIX} ${SPARK_HOME} && \
-    rm -f spark-${SPARK_VERSION}-bin-${SPARK_SUFFIX}.tgz
+RUN SPARK_MAJOR=$(echo "${SPARK_VERSION}" | cut -d. -f1) && \
+    if [ "$SPARK_MAJOR" -ge 4 ]; then SUFFIX=hadoop3; else SUFFIX=without-hadoop; fi && \
+    SPARK_TGZ="spark-${SPARK_VERSION}-bin-${SUFFIX}.tgz" && \
+    mkdir -p /apps && cd /apps && \
+    wget -q "https://archive.apache.org/dist/spark/spark-${SPARK_VERSION}/${SPARK_TGZ}" && \
+    tar -xzf "${SPARK_TGZ}" && \
+    ln -s /apps/spark-${SPARK_VERSION}-bin-${SUFFIX} ${SPARK_HOME} && \
+    rm -f "${SPARK_TGZ}"
 
 # ---- Livy (from build stage) ----
 ENV LIVY_PACKAGE=apache-livy-${LIVY_VERSION}_${SCALA_VERSION}-bin
 ENV LIVY_APP_PATH=/apps/${LIVY_PACKAGE}
 
 COPY --from=builder /build/livy/assembly/target/${LIVY_PACKAGE}.zip /tmp/${LIVY_PACKAGE}.zip
-RUN unzip /tmp/${LIVY_PACKAGE}.zip -d /apps && \
+
+RUN unzip -q /tmp/${LIVY_PACKAGE}.zip -d /apps && \
     mkdir -p ${LIVY_APP_PATH}/upload && \
     mkdir -p ${LIVY_APP_PATH}/logs && \
     rm -f /tmp/${LIVY_PACKAGE}.zip
 
-# Spark 4.0 ArtifactManager creates temp dirs relative to CWD
 WORKDIR /tmp
 
 EXPOSE 8998
