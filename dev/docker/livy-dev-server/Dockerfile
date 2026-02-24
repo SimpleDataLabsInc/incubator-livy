@@ -42,6 +42,8 @@ RUN mkdir -p /tmp/empty-classes && \
       -Dpackaging=jar \
       -Dclassifier=tests
 
+RUN ln -sf /usr/bin/python3 /usr/bin/python
+
 RUN if [ "${SCALA_VERSION}" = "2.13" ]; then \
       mvn clean package -Pscala-2.13 -Pspark3 \
         -pl '!coverage' \
