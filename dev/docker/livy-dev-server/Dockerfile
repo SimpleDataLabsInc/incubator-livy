@@ -46,11 +46,11 @@ RUN ln -sf /usr/bin/python3 /usr/bin/python
 
 RUN if [ "${SCALA_VERSION}" = "2.13" ]; then \
       mvn clean package -Pscala-2.13 -Pspark3 \
-        -pl '!coverage' \
+        -pl '!coverage,!python-api' \
         -DskipTests -DskipITs -Dmaven.test.skip=true -Drat.skip=true -q; \
     else \
       mvn clean package -Pscala-2.12 -Pspark3 \
-        -pl '!coverage' \
+        -pl '!coverage,!python-api' \
         -DskipTests -DskipITs -Dmaven.test.skip=true -Drat.skip=true -q; \
     fi
 
