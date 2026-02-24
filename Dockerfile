@@ -13,88 +13,96 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Builds Docker image for livy
+# Standalone all-in-one Docker image for Livy.
+# Clones the repo and builds Livy from source inside the container.
+#
+# Usage:
+#   Spark 3 + Scala 2.12 (default):
+#     docker build -t livy .
+#
+#   Spark 4 + Scala 2.13:
+#     docker build -t livy \
+#       --build-arg JAVA_VERSION=17 \
+#       --build-arg SPARK_VERSION=4.0.0 \
+#       --build-arg SPARK_SUFFIX=hadoop3 \
+#       --build-arg SCALA_VERSION=2.13 .
 
-FROM debian:stable
+# ============================================================
+# Stage 1: Build Livy from source
+# ============================================================
+FROM debian:stable AS builder
 
-RUN apt-get update && apt-get install -yq --no-install-recommends --force-yes \
+ARG JAVA_VERSION=8
+ARG SCALA_VERSION=2.12
+ARG LIVY_REPO=https://github.com/SimpleDataLabsInc/incubator-livy.git
+ARG LIVY_BRANCH=prophecy-master-refresh
+
+RUN apt-get update && apt-get install -yq --no-install-recommends \
     curl \
     git \
-    openjdk-8-jdk \
+    openjdk-${JAVA_VERSION}-jdk-headless \
     maven \
-    python3 python3-setuptools \
-    r-base \
-    r-base-core \
-    make build-essential libssl-dev zlib1g-dev libbz2-dev libreadline-dev libsqlite3-dev llvm libncurses5-dev  libncursesw5-dev xz-utils tk-dev \
-    libffi-dev \
-    procps wget curl telnet vim && \
-    rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/*
 
-RUN curl -LJO https://www.python.org/ftp/python/3.7.3/Python-3.7.3.tar.xz && tar -xf Python-3.7.3.tar.xz
-#WORKDIR Python-3.7.3
-RUN cd Python-3.7.3 && ./configure --enable-optimizations && make -j 8 && make altinstall
+RUN git clone --depth 1 --branch ${LIVY_BRANCH} ${LIVY_REPO} /build/livy
+WORKDIR /build/livy
 
-RUN update-alternatives --install /usr/bin/python python /usr/local/bin/python3.7 3
-RUN cp /usr/bin/python /usr/bin/python3
+RUN if [ "${SCALA_VERSION}" = "2.13" ]; then \
+      mvn clean package -Pscala-2.13 -Pspark3 \
+        -DskipTests -DskipITs -Drat.skip=true -Dmaven.test.skip=true -q; \
+    else \
+      mvn clean package -Pscala-2.12 -Pspark3 \
+        -DskipTests -DskipITs -Drat.skip=true -Dmaven.test.skip=true -q; \
+    fi
 
-# Install pip for Python3.7.3
-RUN curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
-RUN python get-pip.py
-RUN python -m pip install py4j
-#RUN python3 -m pip install --upgrade setuptools
+# ============================================================
+# Stage 2: Runtime image
+# ============================================================
+FROM debian:stable
 
-ENV PYTHONHASHSEED 0
-ENV PYTHONIOENCODING UTF-8
-ENV PIP_DISABLE_PIP_VERSION_CHECK 1
+ARG JAVA_VERSION=8
+ARG SCALA_VERSION=2.12
+ARG LIVY_VERSION=0.10.0-incubating-SNAPSHOT
+ARG SPARK_VERSION=3.2.3
+# SPARK_SUFFIX: "without-hadoop" for Spark 3.x, "hadoop3" for Spark 4.x
+ARG SPARK_SUFFIX=without-hadoop
 
-ENV HADOOP_FULL_VERSION 2.7.3
-ENV AWS_SDK_VERSION 1.7.4
-ENV AZURE_SDK_VERSION 2.0.0
+RUN apt-get update && apt-get install -yq --no-install-recommends \
+    curl \
+    openjdk-${JAVA_VERSION}-jre-headless \
+    python3 python3-pip \
+    procps wget unzip \
+    && rm -rf /var/lib/apt/lists/*
 
-RUN mvn dependency:get -DgroupId=org.apache.hadoop -DartifactId=hadoop-aws -Dversion=$HADOOP_FULL_VERSION
-RUN mvn dependency:get -DgroupId=com.amazonaws -DartifactId=aws-java-sdk -Dversion=$AWS_SDK_VERSION
-RUN mvn dependency:get -DgroupId=org.apache.hadoop -DartifactId=hadoop-azure -Dversion=$HADOOP_FULL_VERSION
-RUN mvn dependency:get -DgroupId=com.microsoft.azure -DartifactId=azure-storage -Dversion=$AZURE_SDK_VERSION
+RUN python3 -m pip install --break-system-packages py4j 2>/dev/null \
+    || python3 -m pip install py4j
 
-#RUN pip3 install matplotlib pandas
-ARG SPARK_VERSION
-ARG HADOOP_VERSION=hadoop2.7
-ENV SPARK_BUILD_VERSION=$SPARK_VERSION
-ENV HADOOP_ASSOCIATION=$HADOOP_VERSION
-ENV SPARK_HOME /apps/spark-${SPARK_BUILD_VERSION}-bin-${HADOOP_ASSOCIATION}
-ENV SPARK_BUILD_PATH /apps/build/spark
+ENV PYTHONHASHSEED=0
+ENV PYTHONIOENCODING=UTF-8
 
-RUN mkdir -p /apps/build && cd /apps && \
-wget https://archive.apache.org/dist/spark/spark-${SPARK_BUILD_VERSION}/spark-${SPARK_BUILD_VERSION}-bin-${HADOOP_ASSOCIATION}.tgz && \
-tar -xvzf spark-${SPARK_BUILD_VERSION}-bin-${HADOOP_ASSOCIATION}.tgz && \
-rm -rf spark-${SPARK_BUILD_VERSION}-bin-${HADOOP_ASSOCIATION}.tgz
+# ---- Spark ----
+ENV SPARK_HOME=/apps/spark
+ENV PATH="${PATH}:${SPARK_HOME}/bin/"
 
-# ----------
-# Build Livy
-# ----------
-ARG LIVY_VERSION
-ENV LIVY_BUILD_VERSION=$LIVY_VERSION
-ENV LIVY_APP_PATH /apps/apache-livy-$LIVY_BUILD_VERSION-bin
-ENV SPARK_HOME=/apps/spark-${SPARK_BUILD_VERSION}-bin-${HADOOP_ASSOCIATION}
-ENV PATH="${PATH}:/apps/spark-${SPARK_BUILD_VERSION}-bin-${HADOOP_ASSOCIATION}/bin/"
+RUN mkdir -p /apps && cd /apps && \
+    wget -q https://archive.apache.org/dist/spark/spark-${SPARK_VERSION}/spark-${SPARK_VERSION}-bin-${SPARK_SUFFIX}.tgz && \
+    tar -xzf spark-${SPARK_VERSION}-bin-${SPARK_SUFFIX}.tgz && \
+    ln -s /apps/spark-${SPARK_VERSION}-bin-${SPARK_SUFFIX} ${SPARK_HOME} && \
+    rm -f spark-${SPARK_VERSION}-bin-${SPARK_SUFFIX}.tgz
 
-COPY assembly/target/apache-livy-${LIVY_BUILD_VERSION}-bin.zip apache-livy-${LIVY_BUILD_VERSION}-bin.zip
-RUN unzip apache-livy-${LIVY_BUILD_VERSION}-bin.zip -d /apps && \
-    	mkdir -p $LIVY_APP_PATH/upload && \
-      mkdir -p $LIVY_APP_PATH/logs && rm -rf apache-livy-${LIVY_BUILD_VERSION}-bin.zip
+# ---- Livy (from build stage) ----
+ENV LIVY_PACKAGE=apache-livy-${LIVY_VERSION}_${SCALA_VERSION}-bin
+ENV LIVY_APP_PATH=/apps/${LIVY_PACKAGE}
 
-RUN cp ~/.m2/repository/org/apache/hadoop/hadoop-aws/$HADOOP_FULL_VERSION/hadoop-aws-$HADOOP_FULL_VERSION.jar $LIVY_APP_PATH/jars/
-RUN cp ~/.m2/repository/com/amazonaws/aws-java-sdk/$AWS_SDK_VERSION/aws-java-sdk-$AWS_SDK_VERSION.jar $LIVY_APP_PATH/jars/
-RUN cp ~/.m2/repository/org/apache/hadoop/hadoop-azure/$HADOOP_FULL_VERSION/hadoop-azure-$HADOOP_FULL_VERSION.jar $LIVY_APP_PATH/jars/
-RUN cp ~/.m2/repository/com/microsoft/azure/azure-storage/$AZURE_SDK_VERSION/azure-storage-$AZURE_SDK_VERSION.jar $LIVY_APP_PATH/jars/
+COPY --from=builder /build/livy/assembly/target/${LIVY_PACKAGE}.zip /tmp/${LIVY_PACKAGE}.zip
+RUN unzip /tmp/${LIVY_PACKAGE}.zip -d /apps && \
+    mkdir -p ${LIVY_APP_PATH}/upload && \
+    mkdir -p ${LIVY_APP_PATH}/logs && \
+    rm -f /tmp/${LIVY_PACKAGE}.zip
 
-RUN cp ~/.m2/repository/org/apache/hadoop/hadoop-aws/$HADOOP_FULL_VERSION/hadoop-aws-$HADOOP_FULL_VERSION.jar $SPARK_HOME/jars/
-RUN cp ~/.m2/repository/com/amazonaws/aws-java-sdk/$AWS_SDK_VERSION/aws-java-sdk-$AWS_SDK_VERSION.jar $SPARK_HOME/jars/
-RUN cp ~/.m2/repository/org/apache/hadoop/hadoop-azure/$HADOOP_FULL_VERSION/hadoop-azure-$HADOOP_FULL_VERSION.jar $SPARK_HOME/jars/
-RUN cp ~/.m2/repository/com/microsoft/azure/azure-storage/$AZURE_SDK_VERSION/azure-storage-$AZURE_SDK_VERSION.jar $SPARK_HOME/jars/
-
+# Spark 4.0 ArtifactManager creates temp dirs relative to CWD
+WORKDIR /tmp
 
 EXPOSE 8998
-EXPOSE 11000
 
-CMD $LIVY_APP_PATH/bin/livy-server
+CMD ${LIVY_APP_PATH}/bin/livy-server
