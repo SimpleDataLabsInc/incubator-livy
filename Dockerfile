@@ -69,7 +69,6 @@ ARG SPARK_SUFFIX=without-hadoop
 
 RUN apt-get update && apt-get install -yq --no-install-recommends \
     curl \
-    openjdk-${JAVA_VERSION}-jre-headless \
     python3 python3-pip \
     procps wget unzip \
     && rm -rf /var/lib/apt/lists/*
