@@ -58,7 +58,7 @@ RUN if [ "${SCALA_VERSION}" = "2.13" ]; then \
 # ============================================================
 # Stage 2: Runtime image
 # ============================================================
-FROM debian:stable
+FROM eclipse-temurin:17-jdk-noble
 
 ARG JAVA_VERSION=8
 ARG SCALA_VERSION=2.12
