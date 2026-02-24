@@ -125,8 +125,10 @@ ENV PATH="${PATH}:${SPARK_HOME}/bin"
 RUN SPARK_MAJOR=$(echo "${SPARK_VERSION}" | cut -d. -f1) && \
     if [ "$SPARK_MAJOR" -ge 4 ]; then SUFFIX=hadoop3; else SUFFIX=without-hadoop; fi && \
     SPARK_TGZ="spark-${SPARK_VERSION}-bin-${SUFFIX}.tgz" && \
+    SPARK_URL="https://dlcdn.apache.org/spark/spark-${SPARK_VERSION}/${SPARK_TGZ}" && \
+    SPARK_ARCHIVE="https://archive.apache.org/dist/spark/spark-${SPARK_VERSION}/${SPARK_TGZ}" && \
     mkdir -p /apps && cd /apps && \
-    wget -q "https://archive.apache.org/dist/spark/spark-${SPARK_VERSION}/${SPARK_TGZ}" && \
+    (wget -q -T 120 "${SPARK_URL}" || wget -q -T 600 "${SPARK_ARCHIVE}") && \
     tar -xzf "${SPARK_TGZ}" && \
     ln -s /apps/spark-${SPARK_VERSION}-bin-${SUFFIX} ${SPARK_HOME} && \
     rm -f "${SPARK_TGZ}"
