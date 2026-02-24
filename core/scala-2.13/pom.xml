@@ -39,6 +39,9 @@
             <goals>
               <goal>test-jar</goal>
             </goals>
+            <configuration>
+              <skipIfEmpty>false</skipIfEmpty>
+            </configuration>
           </execution>
         </executions>
       </plugin>
