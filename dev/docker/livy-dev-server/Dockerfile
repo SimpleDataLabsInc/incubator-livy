@@ -15,26 +15,48 @@
 # limitations under the License.
 #
 
+# ============================================================
+# Stage 1: Build Livy from source (cloned from git)
+# Uses livy-dev-base which already has Maven + JDK installed.
+# ============================================================
+FROM livy-dev-base:latest AS builder
+
+ARG SCALA_VERSION=2.12
+ARG LIVY_REPO=https://github.com/SimpleDataLabsInc/incubator-livy.git
+ARG LIVY_BRANCH=prophecy-master-refresh
+
+RUN git clone --depth 1 --branch ${LIVY_BRANCH} ${LIVY_REPO} /build/livy
+WORKDIR /build/livy
+
+RUN if [ "${SCALA_VERSION}" = "2.13" ]; then \
+      mvn clean package -Pscala-2.13 -Pspark3 \
+        -DskipTests -DskipITs -Drat.skip=true -Dmaven.test.skip=true -q; \
+    else \
+      mvn clean package -Pscala-2.12 -Pspark3 \
+        -DskipTests -DskipITs -Drat.skip=true -Dmaven.test.skip=true -q; \
+    fi
+
+# ============================================================
+# Stage 2: Runtime image with just Livy binaries
+# ============================================================
 FROM livy-dev-spark:latest
 
+ARG SCALA_VERSION=2.12
 ARG LIVY_VERSION=0.10.0-incubating-SNAPSHOT
 ARG ROOT_PATH=/opt
 
-RUN apt-get update \
-    && apt-get install -y unzip
+RUN apt-get update && apt-get install -y unzip && rm -rf /var/lib/apt/lists/*
 
 ENV LIVY_HOME=${ROOT_PATH}/livy
-ENV LIVY_PACKAGE=apache-livy-${LIVY_VERSION}-bin
+ENV LIVY_PACKAGE=apache-livy-${LIVY_VERSION}_${SCALA_VERSION}-bin
 
-COPY ${LIVY_PACKAGE}.zip ${LIVY_PACKAGE}.zip
+COPY --from=builder /build/livy/assembly/target/${LIVY_PACKAGE}.zip /tmp/${LIVY_PACKAGE}.zip
 
-RUN unzip ${LIVY_PACKAGE}.zip 1>/dev/null \
+RUN unzip /tmp/${LIVY_PACKAGE}.zip 1>/dev/null \
   && mv ${LIVY_PACKAGE} ${ROOT_PATH}/ \
   && ln -s ${ROOT_PATH}/${LIVY_PACKAGE} ${LIVY_HOME} \
   && chown -R root:root ${LIVY_HOME} \
-  && rm ${LIVY_PACKAGE}.zip
+  && rm /tmp/${LIVY_PACKAGE}.zip
 
-# Uncomment following line or add more such lines to replace the default jars with private builds.
-# COPY livy-core_2.12-0.10.0-incubating-SNAPSHOT.jar ${SPARK_HOME}/repl_2.12-jars/livy-core_2.12-0.10.0-incubating-SNAPSHOT.jar
-
-WORKDIR ${LIVY_HOME}
+# Spark 4.0 ArtifactManager creates temp dirs relative to CWD.
+WORKDIR /tmp

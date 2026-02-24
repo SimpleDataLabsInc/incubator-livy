@@ -6,29 +6,47 @@ Following steps use Ubuntu as development environment but most of the instructio
 * Install docker-compose, instructions available [here](https://docs.docker.com/compose/install/)
 
 ## Standalone cluster using docker-compose
-### Build the current livy branch and copy it to appropriate folder
-```
-$ mvn clean package -Pscala-2.12 -Pspark3 -DskipITs -DskipTests
-```
-This generates a zip file for livy similar to `assembly/target/apache-livy-0.10.0-incubating-SNAPSHOT_2.12-bin.zip`. It's useful to use the `clean` target to avoid mixing with previously built dependencies/versions.
 
-### Build container images locally
-* Build livy-dev-base, livy-dev-spark, livy-dev-server container images using provided script `build-images.sh`
+### Option A: Spark 3.x + Scala 2.12 (default)
 ```
-livy/dev/docker$ ls
-README.md  build-images.sh  livy-dev-base  livy-dev-cluster  livy-dev-server  livy-dev-spark
-livy/dev/docker$ ./build-images.sh
+cd dev/docker && ./build-images.sh
 ```
-#### Customizing container images
-`build-images.sh` downloads built up artifacts from Apache's respository however, private builds can be copied to respective container directories to build a container image with private artifacts as well.
-```
-livy-dev-spark uses hadoop and spark tarballs
-livy-dev-server uses livy zip file
-```
+This clones the repo and builds Livy from source inside the container with Scala 2.12 + Spark 3.2.3.
 
-For quicker iteration, copy the modified jars to specific container directories and update corresponding `Dockerfile` to replace those jars as additional steps inside the image. Provided `Dockerfile`s have example lines that can be uncommented/modified to achieve this.
+### Option B: Spark 4.x + Scala 2.13
+```
+cd dev/docker
+SPARK_VERSION=4.0.0 SCALA_VERSION=2.13 HADOOP_VERSION=3.4.1 JAVA_VERSION=17 ./build-images.sh
+```
+This clones the repo and builds Livy from source inside the container with Scala 2.13 + Spark 4.0.0.
+
+No pre-built Livy ZIP is required -- the Dockerfile clones the repo via `git clone` and runs `mvn package` inside a Docker build stage using `livy-dev-base` (which has JDK + Maven). The final runtime image only contains the built binaries.
+
+### Environment variables for `build-images.sh`
+| Variable | Default | Description |
+|---|---|---|
+| `SPARK_VERSION` | `3.2.3` | Spark version to use |
+| `SCALA_VERSION` | `2.12` | Scala binary version (`2.12` or `2.13`) |
+| `HADOOP_VERSION` | `3.3.1` | Hadoop version |
+| `JAVA_VERSION` | `8` (Spark 3) / `17` (Spark 4) | JDK version, auto-detected from Spark major version |
+| `HIVE_VERSION` | `2.3.9` | Hive version |
+| `LIVY_VERSION` | `0.10.0-incubating-SNAPSHOT` | Livy version string |
+| `LIVY_REPO` | `https://github.com/SimpleDataLabsInc/incubator-livy.git` | Git repo URL to clone |
+| `LIVY_BRANCH` | `prophecy-master-refresh` | Git branch to checkout |
+
+### Build architecture
+The build uses a 3-layer Docker image approach:
+1. **livy-dev-base** -- Ubuntu + JDK + Maven + Python (used as Maven build stage too)
+2. **livy-dev-spark** -- Adds Hadoop + Spark on top of base
+3. **livy-dev-server** -- Multi-stage: clones the repo + builds Livy from source in stage 1 (using livy-dev-base), copies built ZIP into runtime image (on top of livy-dev-spark)
+
+### Customizing container images
+`build-images.sh` downloads Hadoop and Spark tarballs from Apache's repository. Private builds can be copied to respective container directories to build a container image with private artifacts as well.
+
+For quicker iteration, copy the modified jars to specific container directories and update corresponding `Dockerfile` to replace those jars as additional steps inside the image.
 
 `livy-dev-cluster` folder contains conf folder with customizable configurations (environment, .conf and log4j.properties files) that can be updated to suit specific needs. Restart the cluster after making changes (without rebuilding the images).
+
 ### Launching the cluster
 ```
 livy/dev/docker/livy-dev-cluster$ docker-compose up
@@ -46,27 +64,8 @@ Attaching to spark-worker-1, spark-master, livy
 * Login to spark-master or spark-worker or livy container using docker cli
 ```
 $ docker exec -it spark-master /bin/bash
-root@master:/opt/spark-3.2.3-bin-without-hadoop# spark-shell
-Setting default log level to "WARN".
-To adjust logging level use sc.setLogLevel(newLevel). For SparkR, use setLogLevel(newLevel).
-2023-01-27 19:32:37,469 WARN util.NativeCodeLoader: Unable to load native-hadoop library for your platform... using builtin-java classes where applicable
-Spark context Web UI available at http://localhost:4040
-Spark context available as 'sc' (master = spark://master:7077, app id = app-20230127193238-0002).
-Spark session available as 'spark'.
-Welcome to
-      ____              __
-     / __/__  ___ _____/ /__
-    _\ \/ _ \/ _ `/ __/  '_/
-   /___/ .__/\_,_/_/ /_/\_\   version 3.2.3
-      /_/
-
-Using Scala version 2.12.15 (OpenJDK 64-Bit Server VM, Java 1.8.0_292)
-Type in expressions to have them evaluated.
-Type :help for more information.
-
-scala> println("Hello world!")
-Hello world!
-``` 
+root@master:/opt/spark# spark-shell
+```
 ### Submit requests to livy using REST apis
 Login to livy container directly and submit requests using REST endpoint
 ```
@@ -114,3 +113,7 @@ Stopping spark-master   ... done
 ```
 docker run -it [imageId | imageName] /bin/bash
 ```
+3. Spark 4.x requires Java 17 -- pass `JAVA_VERSION=17` (auto-detected when `SPARK_VERSION` starts with 4)
+4. Spark 4.x `ArtifactManager` requires a writable working directory; the Dockerfile and docker-compose.yml set `WORKDIR /tmp` and `working_dir: /tmp` respectively to handle this
+5. The first build will take longer since Docker clones the repo and Maven downloads all dependencies inside the container. Subsequent builds leverage Docker layer caching if the branch hasn't changed.
+6. To build from a different branch or fork, override `LIVY_REPO` and `LIVY_BRANCH` environment variables.

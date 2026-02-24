@@ -76,6 +76,7 @@ services:
     image: livy-dev-server:latest
     command: bin/livy-server
     container_name: livy
+    working_dir: /tmp
     environment:
       SPARK_CONF_DIR: /conf
       SPARK_DIVER_CORES: 1
