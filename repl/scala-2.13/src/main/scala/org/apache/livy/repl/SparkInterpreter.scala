@@ -154,17 +154,28 @@ class SparkInterpreter(protected override val conf: SparkConf) extends AbstractS
                 f.setAccessible(true)
                 f.set(reporter, replWriter)
                 done = true
+                info(s"Successfully patched reporter writer via field '$name' " +
+                  s"on ${clazz.getName}")
               }
             } catch {
               case _: NoSuchFieldException =>
-              case _: IllegalAccessException =>
+              case e: IllegalAccessException =>
+                warn(s"Cannot access field '$name' on ${clazz.getName}: ${e.getMessage}. " +
+                  "Compiler error messages may not be captured.")
             }
           }
         }
         clazz = clazz.getSuperclass
       }
+      if (!done) {
+        warn("Failed to patch reporter writer: no writable Writer field found in " +
+          s"${reporter.getClass.getName} hierarchy. " +
+          "Compilation errors may produce empty error messages.")
+      }
     } catch {
-      case _: Exception =>
+      case e: Exception =>
+        warn(s"Failed to patch reporter writer: ${e.getClass.getName}: ${e.getMessage}. " +
+          "Compilation errors may produce empty error messages.")
     }
   }
 }
