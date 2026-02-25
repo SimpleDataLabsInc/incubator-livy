@@ -89,7 +89,7 @@ RUN if [ "${SCALA_VERSION}" = "2.13" ]; then \
 # ============================================================
 # Stage 2: Runtime image
 # ============================================================
-FROM ubuntu:noble
+FROM ubuntu:noble AS runtime
 
 ARG SPARK_VERSION=3.5.6
 ARG SCALA_VERSION=2.12
@@ -149,3 +149,40 @@ WORKDIR /tmp
 EXPOSE 8998
 
 CMD ${LIVY_APP_PATH}/bin/livy-server
+
+# ============================================================
+# Stage 3: Integration test (optional)
+#
+# Only runs when targeted explicitly:
+#   docker build --target test -t livy-test \
+#     --build-arg SPARK_VERSION=4.0.2 --build-arg SCALA_VERSION=2.13 .
+#
+# Normal builds skip this stage entirely:
+#   docker build -t livy \
+#     --build-arg SPARK_VERSION=4.0.2 --build-arg SCALA_VERSION=2.13 .
+# ============================================================
+FROM runtime AS test
+
+COPY dev/test-scala213-interpreter.sh /opt/test-scala213-interpreter.sh
+RUN chmod +x /opt/test-scala213-interpreter.sh
+
+RUN bash -c '\
+  ${LIVY_APP_PATH}/bin/livy-server &  \
+  LIVY_PID=$! ; \
+  echo "Waiting for Livy (pid=$LIVY_PID) to start..." ; \
+  for i in $(seq 1 60); do \
+    curl -sf http://localhost:8998/version >/dev/null 2>&1 && break ; \
+    sleep 2 ; \
+  done ; \
+  if ! curl -sf http://localhost:8998/version >/dev/null 2>&1; then \
+    echo "ERROR: Livy failed to start within 120s" ; \
+    kill $LIVY_PID 2>/dev/null ; \
+    exit 1 ; \
+  fi ; \
+  echo "Livy is up. Running integration tests..." ; \
+  /opt/test-scala213-interpreter.sh http://localhost:8998 ; \
+  TEST_EXIT=$? ; \
+  kill $LIVY_PID 2>/dev/null ; \
+  wait $LIVY_PID 2>/dev/null ; \
+  exit $TEST_EXIT \
+'

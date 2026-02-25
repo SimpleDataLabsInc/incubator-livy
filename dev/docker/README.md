@@ -107,6 +107,64 @@ Stopping spark-worker-1 ... done
 Stopping spark-master   ... done
 ```
 
+## Production Dockerfile (root `Dockerfile`)
+
+The root-level `Dockerfile` builds a standalone all-in-one Livy image (no separate Spark cluster needed — runs in `local[*]` mode). It supports both Spark 3.x and 4.x via build args.
+
+### Building
+
+```bash
+# Spark 3 + Scala 2.12 (default):
+docker build -t livy .
+
+# Spark 4 + Scala 2.13:
+docker build -t livy \
+  --build-arg SPARK_VERSION=4.0.2 \
+  --build-arg SCALA_VERSION=2.13 .
+
+# Custom repo/branch:
+docker build -t livy \
+  --build-arg SPARK_VERSION=4.0.2 \
+  --build-arg SCALA_VERSION=2.13 \
+  --build-arg LIVY_REPO=https://github.com/your-org/incubator-livy.git \
+  --build-arg LIVY_BRANCH=your-branch .
+```
+
+### Running integration tests during build
+
+The Dockerfile includes an optional `test` stage that starts Livy inside the container and runs the adversarial test suite (`dev/test-scala213-interpreter.sh`). If any test fails, the build fails.
+
+```bash
+# Build and run tests (Spark 4 + Scala 2.13):
+docker build --target test -t livy-test \
+  --build-arg SPARK_VERSION=4.0.2 \
+  --build-arg SCALA_VERSION=2.13 .
+```
+
+Normal builds (`docker build -t livy .`) skip the test stage entirely — zero overhead.
+
+The test stage:
+1. Starts Livy server in background
+2. Waits for it to become ready (polls `/version` for up to 120s)
+3. Runs 46 adversarial tests across 8 categories (Scala 2.13 features, error handling, multi-line statements, strings/encoding, state, Spark operations, adversarial inputs, 2.13 regressions)
+4. Kills the server and exits with the test result
+
+### Running tests against an already-running Livy
+
+The test script can also be run standalone against any Livy instance:
+
+```bash
+# Against a local Docker container:
+docker run -d --name livy -p 8998:8998 livy
+./dev/test-scala213-interpreter.sh http://localhost:8998
+
+# Against a K8s pod (port-forwarded):
+kubectl port-forward svc/livy-service 8998:8998 &
+./dev/test-scala213-interpreter.sh http://localhost:8998
+```
+
+The script exits with the number of failures (0 = all passed), suitable for CI.
+
 ## Common Gotchas
 1. Use `docker-compose down` to clean up all the resources created for the cluster
 2. Login to created images to check the state
