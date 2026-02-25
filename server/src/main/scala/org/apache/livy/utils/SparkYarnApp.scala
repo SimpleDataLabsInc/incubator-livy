@@ -141,9 +141,9 @@ class SparkYarnApp private[utils] (
   private var yarnDiagnostics: IndexedSeq[String] = IndexedSeq.empty[String]
 
   override def log(): IndexedSeq[String] =
-    ("stdout: " +: process.map(_.inputLines).getOrElse(ArrayBuffer.empty[String])) ++
+    (("stdout: " +: process.map(_.inputLines).getOrElse(ArrayBuffer.empty[String])) ++
     ("\nstderr: " +: process.map(_.errorLines).getOrElse(ArrayBuffer.empty[String])) ++
-    ("\nYARN Diagnostics: " +: yarnDiagnostics)
+    ("\nYARN Diagnostics: " +: yarnDiagnostics)).toIndexedSeq
 
   override def kill(): Unit = synchronized {
     killed = true
@@ -162,6 +162,10 @@ class SparkYarnApp private[utils] (
         process.foreach(_.destroy())
       }
     }
+  }
+
+  private def isProcessAlive(): Boolean = {
+    process.isDefined && process.get.isAlive
   }
 
   private def isProcessErrExit(): Boolean = {
@@ -282,34 +286,48 @@ class SparkYarnApp private[utils] (
         try {
           Clock.sleep(pollInterval.toMillis)
 
-          // Refresh application state
-          val appReport = yarnClient.getApplicationReport(appId)
-          yarnDiagnostics = getYarnDiagnostics(appReport)
-          changeState(mapYarnState(
-            appReport.getApplicationId,
-            appReport.getYarnApplicationState,
-            appReport.getFinalApplicationStatus))
+          if (!isProcessAlive()) {
+            // Refresh application state
+            val appReport = yarnClient.getApplicationReport(appId)
+            yarnDiagnostics = getYarnDiagnostics(appReport)
 
-          if (isProcessErrExit()) {
-            if (killed) {
-              changeState(SparkApp.State.KILLED)
-            } else {
-              changeState(SparkApp.State.FAILED)
+            // figure out the application's actual state and update in a single operation
+            val sessState =
+              if (isProcessErrExit()) {
+                if (killed) {
+                  debug(s"sess state: process killed")
+                  SparkApp.State.KILLED
+                } else {
+                  debug(s"sess state: process err exited")
+                  SparkApp.State.FAILED
+                }
+              }
+              else {
+                val yarnState = mapYarnState(
+                  appReport.getApplicationId,
+                  appReport.getYarnApplicationState,
+                  appReport.getFinalApplicationStatus)
+                debug(s"sess state: yarn=${yarnState}")
+                yarnState
+              }
+            changeState(sessState)
+
+            val latestAppInfo = {
+              val attempt =
+                yarnClient.getApplicationAttemptReport(appReport.getCurrentApplicationAttemptId)
+              val driverLogUrl = if (state == SparkApp.State.FINISHED) {
+                None
+              } else {
+                Try(yarnClient.getContainerReport(attempt.getAMContainerId).getLogUrl)
+                  .toOption
+              }
+              AppInfo(driverLogUrl, Option(appReport.getTrackingUrl))
             }
-          }
 
-          val latestAppInfo = {
-            val attempt =
-              yarnClient.getApplicationAttemptReport(appReport.getCurrentApplicationAttemptId)
-            val driverLogUrl =
-              Try(yarnClient.getContainerReport(attempt.getAMContainerId).getLogUrl)
-                .toOption
-            AppInfo(driverLogUrl, Option(appReport.getTrackingUrl))
-          }
-
-          if (appInfo != latestAppInfo) {
-            listener.foreach(_.infoChanged(latestAppInfo))
-            appInfo = latestAppInfo
+            if (appInfo != latestAppInfo) {
+              listener.foreach(_.infoChanged(latestAppInfo))
+              appInfo = latestAppInfo
+            }
           }
         } catch {
           // This exception might be thrown during app is starting up. It's transient.
@@ -327,11 +345,11 @@ class SparkYarnApp private[utils] (
       debug(s"$appId $state ${yarnDiagnostics.mkString(" ")}")
     } catch {
       case _: InterruptedException =>
-        yarnDiagnostics = ArrayBuffer("Session stopped by user.")
+        yarnDiagnostics = IndexedSeq("Session stopped by user.")
         changeState(SparkApp.State.KILLED)
       case NonFatal(e) =>
         error(s"Error whiling refreshing YARN state", e)
-        yarnDiagnostics = ArrayBuffer(e.getMessage)
+        yarnDiagnostics = IndexedSeq(e.getMessage)
         changeState(SparkApp.State.FAILED)
     }
   }

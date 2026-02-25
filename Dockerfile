@@ -13,88 +13,176 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Builds Docker image for livy
+# Standalone all-in-one Docker image for Livy.
+# Clones the repo and builds Livy from source inside the container.
+# Supports both Spark 3.x (Scala 2.12, JDK 8) and Spark 4.x (Scala 2.13, JDK 17).
+#
+# Java version and Spark tarball naming are auto-derived from SPARK_VERSION.
+#
+# Usage:
+#   Spark 3 + Scala 2.12 (default):
+#     docker build -t livy .
+#
+#   Spark 4 + Scala 2.13:
+#     docker build -t livy \
+#       --build-arg SPARK_VERSION=4.0.2 \
+#       --build-arg SCALA_VERSION=2.13 .
+#
+#   Custom repo/branch:
+#     docker build -t livy \
+#       --build-arg SPARK_VERSION=4.0.2 \
+#       --build-arg SCALA_VERSION=2.13 \
+#       --build-arg LIVY_REPO=https://github.com/your-org/incubator-livy.git \
+#       --build-arg LIVY_BRANCH=your-branch .
 
-FROM debian:stable
+# ============================================================
+# Stage 1: Build Livy from source
+# ============================================================
+FROM ubuntu:noble AS builder
 
-RUN apt-get update && apt-get install -yq --no-install-recommends --force-yes \
-    curl \
-    git \
-    openjdk-8-jdk \
-    maven \
-    python3 python3-setuptools \
-    r-base \
-    r-base-core \
-    make build-essential libssl-dev zlib1g-dev libbz2-dev libreadline-dev libsqlite3-dev llvm libncurses5-dev  libncursesw5-dev xz-utils tk-dev \
-    libffi-dev \
-    procps wget curl telnet vim && \
-    rm -rf /var/lib/apt/lists/*
+ARG SPARK_VERSION=3.5.6
+ARG SCALA_VERSION=2.12
+ARG LIVY_VERSION=0.10.0-incubating-SNAPSHOT
+ARG LIVY_REPO=https://github.com/SimpleDataLabsInc/incubator-livy.git
+ARG LIVY_BRANCH=prophecy-master-refresh
 
-RUN curl -LJO https://www.python.org/ftp/python/3.7.3/Python-3.7.3.tar.xz && tar -xf Python-3.7.3.tar.xz
-#WORKDIR Python-3.7.3
-RUN cd Python-3.7.3 && ./configure --enable-optimizations && make -j 8 && make altinstall
+ENV DEBIAN_FRONTEND=noninteractive
 
-RUN update-alternatives --install /usr/bin/python python /usr/local/bin/python3.7 3
-RUN cp /usr/bin/python /usr/bin/python3
+# Install JDK (8 for Spark 3.x, 17 for Spark 4.x) + build tools
+RUN SPARK_MAJOR=$(echo "${SPARK_VERSION}" | cut -d. -f1) && \
+    if [ "$SPARK_MAJOR" -ge 4 ]; then JV=17; else JV=8; fi && \
+    apt-get update && apt-get install -yq --no-install-recommends \
+      curl git maven python3 \
+      openjdk-${JV}-jdk-headless \
+    && ARCH=$(dpkg --print-architecture) \
+    && ln -s /usr/lib/jvm/java-${JV}-openjdk-${ARCH} /usr/lib/jvm/java-current \
+    && ln -sf /usr/bin/python3 /usr/bin/python \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install pip for Python3.7.3
-RUN curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
-RUN python get-pip.py
-RUN python -m pip install py4j
-#RUN python3 -m pip install --upgrade setuptools
+ENV JAVA_HOME=/usr/lib/jvm/java-current
 
-ENV PYTHONHASHSEED 0
-ENV PYTHONIOENCODING UTF-8
-ENV PIP_DISABLE_PIP_VERSION_CHECK 1
+RUN git clone --depth 1 --branch ${LIVY_BRANCH} ${LIVY_REPO} /build/livy
+WORKDIR /build/livy
 
-ENV HADOOP_FULL_VERSION 2.7.3
-ENV AWS_SDK_VERSION 1.7.4
-ENV AZURE_SDK_VERSION 2.0.0
+# Placeholder test-jar so repl's test-scoped dependency on
+# livy-core_<scala> resolves when test compilation is skipped.
+RUN mkdir -p /tmp/empty-classes && \
+    jar cf /tmp/empty-tests.jar -C /tmp/empty-classes . && \
+    mvn install:install-file -q \
+      -Dfile=/tmp/empty-tests.jar \
+      -DgroupId=org.apache.livy \
+      -DartifactId=livy-core_${SCALA_VERSION} \
+      -Dversion=${LIVY_VERSION} \
+      -Dpackaging=jar \
+      -Dclassifier=tests
 
-RUN mvn dependency:get -DgroupId=org.apache.hadoop -DartifactId=hadoop-aws -Dversion=$HADOOP_FULL_VERSION
-RUN mvn dependency:get -DgroupId=com.amazonaws -DartifactId=aws-java-sdk -Dversion=$AWS_SDK_VERSION
-RUN mvn dependency:get -DgroupId=org.apache.hadoop -DartifactId=hadoop-azure -Dversion=$HADOOP_FULL_VERSION
-RUN mvn dependency:get -DgroupId=com.microsoft.azure -DartifactId=azure-storage -Dversion=$AZURE_SDK_VERSION
+RUN if [ "${SCALA_VERSION}" = "2.13" ]; then \
+      mvn clean package -Pscala-2.13 -Pspark3 \
+        -pl '!coverage,!python-api' \
+        -DskipTests -DskipITs -Dmaven.test.skip=true -Drat.skip=true -q; \
+    else \
+      mvn clean package -Pscala-2.12 -Pspark3 \
+        -pl '!coverage,!python-api' \
+        -DskipTests -DskipITs -Dmaven.test.skip=true -Drat.skip=true -q; \
+    fi
 
-#RUN pip3 install matplotlib pandas
-ARG SPARK_VERSION
-ARG HADOOP_VERSION=hadoop2.7
-ENV SPARK_BUILD_VERSION=$SPARK_VERSION
-ENV HADOOP_ASSOCIATION=$HADOOP_VERSION
-ENV SPARK_HOME /apps/spark-${SPARK_BUILD_VERSION}-bin-${HADOOP_ASSOCIATION}
-ENV SPARK_BUILD_PATH /apps/build/spark
+# ============================================================
+# Stage 2: Runtime image
+# ============================================================
+FROM ubuntu:noble AS runtime
 
-RUN mkdir -p /apps/build && cd /apps && \
-wget https://archive.apache.org/dist/spark/spark-${SPARK_BUILD_VERSION}/spark-${SPARK_BUILD_VERSION}-bin-${HADOOP_ASSOCIATION}.tgz && \
-tar -xvzf spark-${SPARK_BUILD_VERSION}-bin-${HADOOP_ASSOCIATION}.tgz && \
-rm -rf spark-${SPARK_BUILD_VERSION}-bin-${HADOOP_ASSOCIATION}.tgz
+ARG SPARK_VERSION=3.5.6
+ARG SCALA_VERSION=2.12
+ARG LIVY_VERSION=0.10.0-incubating-SNAPSHOT
 
-# ----------
-# Build Livy
-# ----------
-ARG LIVY_VERSION
-ENV LIVY_BUILD_VERSION=$LIVY_VERSION
-ENV LIVY_APP_PATH /apps/apache-livy-$LIVY_BUILD_VERSION-bin
-ENV SPARK_HOME=/apps/spark-${SPARK_BUILD_VERSION}-bin-${HADOOP_ASSOCIATION}
-ENV PATH="${PATH}:/apps/spark-${SPARK_BUILD_VERSION}-bin-${HADOOP_ASSOCIATION}/bin/"
+ENV DEBIAN_FRONTEND=noninteractive
 
-COPY assembly/target/apache-livy-${LIVY_BUILD_VERSION}-bin.zip apache-livy-${LIVY_BUILD_VERSION}-bin.zip
-RUN unzip apache-livy-${LIVY_BUILD_VERSION}-bin.zip -d /apps && \
-    	mkdir -p $LIVY_APP_PATH/upload && \
-      mkdir -p $LIVY_APP_PATH/logs && rm -rf apache-livy-${LIVY_BUILD_VERSION}-bin.zip
+# Install JRE (8 for Spark 3.x, 17 for Spark 4.x) + runtime deps
+RUN SPARK_MAJOR=$(echo "${SPARK_VERSION}" | cut -d. -f1) && \
+    if [ "$SPARK_MAJOR" -ge 4 ]; then JV=17; else JV=8; fi && \
+    apt-get update && apt-get install -yq --no-install-recommends \
+      curl wget unzip procps tini \
+      python3 python3-pip \
+      openjdk-${JV}-jre-headless \
+    && ARCH=$(dpkg --print-architecture) \
+    && ln -s /usr/lib/jvm/java-${JV}-openjdk-${ARCH} /usr/lib/jvm/java-current \
+    && ln -sf /usr/bin/python3 /usr/bin/python \
+    && rm -rf /var/lib/apt/lists/*
 
-RUN cp ~/.m2/repository/org/apache/hadoop/hadoop-aws/$HADOOP_FULL_VERSION/hadoop-aws-$HADOOP_FULL_VERSION.jar $LIVY_APP_PATH/jars/
-RUN cp ~/.m2/repository/com/amazonaws/aws-java-sdk/$AWS_SDK_VERSION/aws-java-sdk-$AWS_SDK_VERSION.jar $LIVY_APP_PATH/jars/
-RUN cp ~/.m2/repository/org/apache/hadoop/hadoop-azure/$HADOOP_FULL_VERSION/hadoop-azure-$HADOOP_FULL_VERSION.jar $LIVY_APP_PATH/jars/
-RUN cp ~/.m2/repository/com/microsoft/azure/azure-storage/$AZURE_SDK_VERSION/azure-storage-$AZURE_SDK_VERSION.jar $LIVY_APP_PATH/jars/
+RUN python3 -m pip install --break-system-packages py4j 2>/dev/null \
+    || python3 -m pip install py4j
 
-RUN cp ~/.m2/repository/org/apache/hadoop/hadoop-aws/$HADOOP_FULL_VERSION/hadoop-aws-$HADOOP_FULL_VERSION.jar $SPARK_HOME/jars/
-RUN cp ~/.m2/repository/com/amazonaws/aws-java-sdk/$AWS_SDK_VERSION/aws-java-sdk-$AWS_SDK_VERSION.jar $SPARK_HOME/jars/
-RUN cp ~/.m2/repository/org/apache/hadoop/hadoop-azure/$HADOOP_FULL_VERSION/hadoop-azure-$HADOOP_FULL_VERSION.jar $SPARK_HOME/jars/
-RUN cp ~/.m2/repository/com/microsoft/azure/azure-storage/$AZURE_SDK_VERSION/azure-storage-$AZURE_SDK_VERSION.jar $SPARK_HOME/jars/
+ENV JAVA_HOME=/usr/lib/jvm/java-current
+ENV PYTHONHASHSEED=0
+ENV PYTHONIOENCODING=UTF-8
 
+# ---- Spark ----
+# Spark 3.x tarballs: spark-<ver>-bin-without-hadoop.tgz
+# Spark 4.x tarballs: spark-<ver>-bin-hadoop3.tgz
+ENV SPARK_HOME=/apps/spark
+ENV PATH="${PATH}:${SPARK_HOME}/bin"
+
+RUN SPARK_MAJOR=$(echo "${SPARK_VERSION}" | cut -d. -f1) && \
+    if [ "$SPARK_MAJOR" -ge 4 ]; then SUFFIX=hadoop3; else SUFFIX=without-hadoop; fi && \
+    SPARK_TGZ="spark-${SPARK_VERSION}-bin-${SUFFIX}.tgz" && \
+    SPARK_URL="https://dlcdn.apache.org/spark/spark-${SPARK_VERSION}/${SPARK_TGZ}" && \
+    SPARK_ARCHIVE="https://archive.apache.org/dist/spark/spark-${SPARK_VERSION}/${SPARK_TGZ}" && \
+    mkdir -p /apps && cd /apps && \
+    (wget -q -T 120 "${SPARK_URL}" || wget -q -T 600 "${SPARK_ARCHIVE}") && \
+    tar -xzf "${SPARK_TGZ}" && \
+    ln -s /apps/spark-${SPARK_VERSION}-bin-${SUFFIX} ${SPARK_HOME} && \
+    rm -f "${SPARK_TGZ}"
+
+# ---- Livy (from build stage) ----
+ENV LIVY_PACKAGE=apache-livy-${LIVY_VERSION}_${SCALA_VERSION}-bin
+ENV LIVY_APP_PATH=/apps/${LIVY_PACKAGE}
+
+COPY --from=builder /build/livy/assembly/target/${LIVY_PACKAGE}.zip /tmp/${LIVY_PACKAGE}.zip
+
+RUN unzip -q /tmp/${LIVY_PACKAGE}.zip -d /apps && \
+    mkdir -p ${LIVY_APP_PATH}/upload && \
+    mkdir -p ${LIVY_APP_PATH}/logs && \
+    rm -f /tmp/${LIVY_PACKAGE}.zip
+
+WORKDIR /tmp
 
 EXPOSE 8998
-EXPOSE 11000
 
-CMD $LIVY_APP_PATH/bin/livy-server
+CMD ${LIVY_APP_PATH}/bin/livy-server
+
+# ============================================================
+# Stage 3: Integration test (optional)
+#
+# Only runs when targeted explicitly:
+#   docker build --target test -t livy-test \
+#     --build-arg SPARK_VERSION=4.0.2 --build-arg SCALA_VERSION=2.13 .
+#
+# Normal builds skip this stage entirely:
+#   docker build -t livy \
+#     --build-arg SPARK_VERSION=4.0.2 --build-arg SCALA_VERSION=2.13 .
+# ============================================================
+FROM runtime AS test
+
+COPY dev/test-scala213-interpreter.sh /opt/test-scala213-interpreter.sh
+RUN chmod +x /opt/test-scala213-interpreter.sh
+
+RUN bash -c '\
+  ${LIVY_APP_PATH}/bin/livy-server &  \
+  LIVY_PID=$! ; \
+  echo "Waiting for Livy (pid=$LIVY_PID) to start..." ; \
+  for i in $(seq 1 60); do \
+    curl -sf http://localhost:8998/version >/dev/null 2>&1 && break ; \
+    sleep 2 ; \
+  done ; \
+  if ! curl -sf http://localhost:8998/version >/dev/null 2>&1; then \
+    echo "ERROR: Livy failed to start within 120s" ; \
+    kill $LIVY_PID 2>/dev/null ; \
+    exit 1 ; \
+  fi ; \
+  echo "Livy is up. Running integration tests..." ; \
+  /opt/test-scala213-interpreter.sh http://localhost:8998 ; \
+  TEST_EXIT=$? ; \
+  kill $LIVY_PID 2>/dev/null ; \
+  wait $LIVY_PID 2>/dev/null ; \
+  exit $TEST_EXIT \
+'

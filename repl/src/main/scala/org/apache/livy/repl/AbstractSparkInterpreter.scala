@@ -61,6 +61,8 @@ abstract class AbstractSparkInterpreter extends Interpreter with Logging {
 
   protected def conf: SparkConf
 
+  protected def addJar(jar: String): Unit
+
   protected def postStart(): Unit = {
     entries = new SparkEntries(conf)
 
@@ -295,6 +297,11 @@ abstract class AbstractSparkInterpreter extends Interpreter with Logging {
   }
 
   private def executeLine(code: String): Interpreter.ExecuteResponse = {
+    val trimmed = code.trim
+    if (trimmed.isEmpty || trimmed.startsWith("//") ||
+        (trimmed.startsWith("/*") && trimmed.endsWith("*/"))) {
+      return Interpreter.ExecuteSuccess(TEXT_PLAIN -> "")
+    }
     code match {
       case MAGIC_REGEX(magic, rest) =>
         executeMagic(magic, rest)

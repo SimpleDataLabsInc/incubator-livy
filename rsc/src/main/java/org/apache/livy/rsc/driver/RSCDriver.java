@@ -169,6 +169,13 @@ public class RSCDriver extends BaseProtocol {
     // on the cluster, it would be tricky to solve that problem in a generic way.
     livyConf.set(RPC_SERVER_ADDRESS, null);
 
+    // If we are running on Kubernetes, get RPC_SERVER_ADDRESS from "spark.driver.host" option
+    // this option is set in class org.apache.spark.deploy.k8s.features.DriverServiceFeatureStep:
+    // line 61: val driverHostname = s"$resolvedServiceName.${kubernetesConf.namespace()}.svc"
+    if (conf.get("spark.master").startsWith("k8s")) {
+      livyConf.set(RPC_SERVER_ADDRESS, conf.get("spark.driver.host"));
+    }
+
     if (livyConf.getBoolean(TEST_STUCK_START_DRIVER)) {
       // Test flag is turned on so we will just infinite loop here. It should cause
       // timeout and we should still see yarn application being cleaned up.
@@ -482,11 +489,12 @@ public class RSCDriver extends BaseProtocol {
     jc.sc().addFile(path);
   }
 
-  protected void addJarOrPyFile(String path) throws Exception {
+  protected String addJarOrPyFile(String path) throws Exception {
     File localCopyDir = new File(jc.getLocalTmpDir(), "__livy__");
     File localCopy = copyFileToLocal(localCopyDir, path, jc.sc().sc());
     addLocalFileToClassLoader(localCopy);
     jc.sc().addJar(path);
+    return localCopy.getPath();
   }
 
   public void addLocalFileToClassLoader(File localCopy) throws MalformedURLException {
@@ -509,8 +517,9 @@ public class RSCDriver extends BaseProtocol {
     File localCopy = new File(localCopyDir, name);
 
     if (localCopy.exists()) {
-      throw new IOException(String.format("A file with name %s has " +
-              "already been uploaded.", name));
+      LOG.warn(String.format("A file with name %s has " +
+              "already been uploaded, and hence will not be replaced.", name));
+      return localCopy;
     }
     Configuration conf = sc.hadoopConfiguration();
     FileSystem fs = FileSystem.get(uri, conf);
