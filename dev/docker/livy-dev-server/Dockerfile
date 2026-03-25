@@ -22,6 +22,7 @@
 FROM livy-dev-base:latest AS builder
 
 ARG SCALA_VERSION=2.12
+ARG SPARK_VERSION=3.5.6
 ARG LIVY_REPO=https://github.com/SimpleDataLabsInc/incubator-livy.git
 ARG LIVY_BRANCH=prophecy-master-refresh
 
@@ -44,15 +45,13 @@ RUN mkdir -p /tmp/empty-classes && \
 
 RUN ln -sf /usr/bin/python3 /usr/bin/python
 
-RUN if [ "${SCALA_VERSION}" = "2.13" ]; then \
-      mvn clean package -Pscala-2.13 -Pspark3 \
-        -pl '!coverage,!python-api' \
-        -DskipTests -DskipITs -Dmaven.test.skip=true -Drat.skip=true -q; \
-    else \
-      mvn clean package -Pscala-2.12 -Pspark3 \
-        -pl '!coverage,!python-api' \
-        -DskipTests -DskipITs -Dmaven.test.skip=true -Drat.skip=true -q; \
-    fi
+RUN SPARK_MAJOR=$(echo "${SPARK_VERSION}" | cut -d. -f1) && \
+    if [ "$SPARK_MAJOR" -ge 4 ]; then SPARK_PROFILE=spark4; else SPARK_PROFILE=spark3; fi && \
+    if [ "${SCALA_VERSION}" = "2.13" ]; then SCALA_PROFILE=scala-2.13; else SCALA_PROFILE=scala-2.12; fi && \
+    mvn clean package -P${SCALA_PROFILE} -P${SPARK_PROFILE} \
+      -Dspark.version=${SPARK_VERSION} \
+      -pl '!coverage,!python-api' \
+      -DskipTests -DskipITs -Dmaven.test.skip=true -Drat.skip=true -q
 
 # ============================================================
 # Stage 2: Runtime image with just Livy binaries

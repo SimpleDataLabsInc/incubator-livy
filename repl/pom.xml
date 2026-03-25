@@ -190,6 +190,7 @@
                   <include>org.json4s:json4s-ast_${scala.binary.version}</include>
                   <include>org.json4s:json4s-core_${scala.binary.version}</include>
                   <include>org.json4s:json4s-jackson_${scala.binary.version}</include>
+                  <include>org.json4s:json4s-jackson-core_${scala.binary.version}</include>
                   <include>org.json4s:json4s-scalap_${scala.binary.version}</include>
                   <include>com.esotericsoftware:kryo-shaded</include>
                 </includes>
@@ -232,6 +233,7 @@
                 json4s-ast_${scala.binary.version},
                 json4s-core_${scala.binary.version},
                 json4s-jackson_${scala.binary.version},
+                json4s-jackson-core_${scala.binary.version},
                 json4s-scalap_${scala.binary.version},
                 scala-xml_${scala.binary.version},
                 paranamer,

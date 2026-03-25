@@ -76,15 +76,13 @@ RUN mkdir -p /tmp/empty-classes && \
       -Dpackaging=jar \
       -Dclassifier=tests
 
-RUN if [ "${SCALA_VERSION}" = "2.13" ]; then \
-      mvn clean package -Pscala-2.13 -Pspark3 \
-        -pl '!coverage,!python-api' \
-        -DskipTests -DskipITs -Dmaven.test.skip=true -Drat.skip=true -q; \
-    else \
-      mvn clean package -Pscala-2.12 -Pspark3 \
-        -pl '!coverage,!python-api' \
-        -DskipTests -DskipITs -Dmaven.test.skip=true -Drat.skip=true -q; \
-    fi
+RUN SPARK_MAJOR=$(echo "${SPARK_VERSION}" | cut -d. -f1) && \
+    if [ "$SPARK_MAJOR" -ge 4 ]; then SPARK_PROFILE=spark4; else SPARK_PROFILE=spark3; fi && \
+    if [ "${SCALA_VERSION}" = "2.13" ]; then SCALA_PROFILE=scala-2.13; else SCALA_PROFILE=scala-2.12; fi && \
+    mvn clean package -P${SCALA_PROFILE} -P${SPARK_PROFILE} \
+      -Dspark.version=${SPARK_VERSION} \
+      -pl '!coverage,!python-api' \
+      -DskipTests -DskipITs -Dmaven.test.skip=true -Drat.skip=true -q
 
 # ============================================================
 # Stage 2: Runtime image
