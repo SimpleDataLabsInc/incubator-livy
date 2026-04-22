@@ -81,9 +81,6 @@ class SparkInterpreter(protected override val conf: SparkConf) extends AbstractS
             .filterNot { u =>
               Paths.get(u.toURI).getFileName.toString.contains("org.scala-lang_scala-reflect")
             }
-            .filterNot { u =>
-              Paths.get(u.toURI).getFileName.toString.contains("prophecy-libs")
-            }
 
           extraJarPath.foreach { p => debug(s"Adding $p to Scala interpreter's class path...") }
           sparkILoop.intp.addUrlsToClassPath(extraJarPath: _*)
@@ -107,11 +104,7 @@ class SparkInterpreter(protected override val conf: SparkConf) extends AbstractS
   }
 
   override def addJar(jar: String): Unit = {
-    if (jar.contains("prophecy-libs")) {
-      info(s"Skipping REPL classpath addition for $jar (parent-classloader-only)")
-    } else {
-      sparkILoop.intp.addUrlsToClassPath(new URL(jar))
-    }
+    sparkILoop.intp.addUrlsToClassPath(new URL(jar))
   }
 
   override protected def isStarted(): Boolean = {
