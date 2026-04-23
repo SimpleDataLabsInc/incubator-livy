@@ -22,6 +22,7 @@ import java.net.{URL, URLClassLoader}
 import java.nio.file.{Files, Paths}
 
 import scala.tools.nsc.GenericRunnerSettings
+import scala.tools.nsc.interpreter.IMain
 import scala.tools.nsc.interpreter.Results
 import scala.tools.nsc.interpreter.Results.Result
 
@@ -89,7 +90,7 @@ class SparkInterpreter(protected override val conf: SparkConf) extends AbstractS
           sparkILoop.intp.addUrlsToClassPath(otherJars: _*)
           if (prophecyJars.nonEmpty) {
             prophecyJars.foreach { p => debug(s"Adding $p to compiler classpath only...") }
-            sparkILoop.intp.global.extendCompilerClassPath(prophecyJars: _*)
+            sparkILoop.intp.asInstanceOf[IMain].global.extendCompilerClassPath(prophecyJars: _*)
           }
           classLoader = null
         } else {
@@ -117,7 +118,7 @@ class SparkInterpreter(protected override val conf: SparkConf) extends AbstractS
       // The runtime classloader will delegate to the parent MutableURLClassLoader
       // (which already has this JAR), avoiding the child-first ClassCastException
       // on Spark 4 where the REPL and SparkListener load different class copies.
-      sparkILoop.intp.global.extendCompilerClassPath(url)
+      sparkILoop.intp.asInstanceOf[IMain].global.extendCompilerClassPath(url)
     } else {
       sparkILoop.intp.addUrlsToClassPath(url)
     }
