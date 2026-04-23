@@ -82,8 +82,15 @@ class SparkInterpreter(protected override val conf: SparkConf) extends AbstractS
               Paths.get(u.toURI).getFileName.toString.contains("org.scala-lang_scala-reflect")
             }
 
-          extraJarPath.foreach { p => debug(s"Adding $p to Scala interpreter's class path...") }
-          sparkILoop.intp.addUrlsToClassPath(extraJarPath: _*)
+          val (prophecyJars, otherJars) = extraJarPath.partition { u =>
+            Paths.get(u.toURI).getFileName.toString.contains("prophecy-libs")
+          }
+          otherJars.foreach { p => debug(s"Adding $p to Scala interpreter's class path...") }
+          sparkILoop.intp.addUrlsToClassPath(otherJars: _*)
+          if (prophecyJars.nonEmpty) {
+            prophecyJars.foreach { p => debug(s"Adding $p to compiler classpath only...") }
+            sparkILoop.intp.global.extendCompilerClassPath(prophecyJars: _*)
+          }
           classLoader = null
         } else {
           classLoader = classLoader.getParent
@@ -104,7 +111,16 @@ class SparkInterpreter(protected override val conf: SparkConf) extends AbstractS
   }
 
   override def addJar(jar: String): Unit = {
-    sparkILoop.intp.addUrlsToClassPath(new URL(jar))
+    val url = new URL(jar)
+    if (jar.contains("prophecy-libs")) {
+      // Add to compiler classpath only — not the REPL runtime classloader.
+      // The runtime classloader will delegate to the parent MutableURLClassLoader
+      // (which already has this JAR), avoiding the child-first ClassCastException
+      // on Spark 4 where the REPL and SparkListener load different class copies.
+      sparkILoop.intp.global.extendCompilerClassPath(url)
+    } else {
+      sparkILoop.intp.addUrlsToClassPath(url)
+    }
   }
 
   override protected def isStarted(): Boolean = {
