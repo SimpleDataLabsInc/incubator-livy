@@ -23,6 +23,9 @@ import scala.concurrent.duration.Duration
 import io.netty.channel.ChannelHandlerContext
 import org.apache.spark.SparkConf
 
+import java.io.File
+import java.net.MalformedURLException
+
 import org.apache.livy.{EOLUtils, Logging}
 import org.apache.livy.client.common.ClientConf
 import org.apache.livy.rsc.{BaseProtocol, ReplJobResults, RSCConf}
@@ -117,6 +120,21 @@ class ReplDriver(conf: SparkConf, livyConf: RSCConf)
       }
     }
     super.addFile(path)
+  }
+
+  // Spark 4's REPL classloader (TranslatingClassLoader → ScalaClassLoader$URLClassLoader)
+  // is disconnected from Livy's MutableClassLoader. When prophecy-libs is added to BOTH,
+  // each classloader loads its own copy of the same class, causing ClassCastException when
+  // objects cross the boundary (e.g. InterimRow created by one CL cast via another).
+  // Fix: skip adding prophecy-libs to MutableClassLoader so it only lives in the REPL CL.
+  @throws[MalformedURLException]
+  override def addLocalFileToClassLoader(localCopy: File): Unit = {
+    if (localCopy.getName.contains("prophecy-libs")) {
+      info(s"Skipping MutableClassLoader addition for ${localCopy.getName} " +
+        "(REPL-classloader-only to prevent ClassCastException)")
+    } else {
+      super.addLocalFileToClassLoader(localCopy)
+    }
   }
 
   override protected def addJarOrPyFile(path: String): String = {

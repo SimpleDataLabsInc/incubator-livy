@@ -22,7 +22,6 @@ import java.net.{URL, URLClassLoader}
 import java.nio.file.{Files, Paths}
 
 import scala.tools.nsc.GenericRunnerSettings
-import scala.tools.nsc.interpreter.IMain
 import scala.tools.nsc.interpreter.Results
 import scala.tools.nsc.interpreter.Results.Result
 
@@ -82,16 +81,12 @@ class SparkInterpreter(protected override val conf: SparkConf) extends AbstractS
             .filterNot { u =>
               Paths.get(u.toURI).getFileName.toString.contains("org.scala-lang_scala-reflect")
             }
+            .filterNot { u =>
+              Paths.get(u.toURI).getFileName.toString.contains("prophecy-libs")
+            }
 
-          val (prophecyJars, otherJars) = extraJarPath.partition { u =>
-            Paths.get(u.toURI).getFileName.toString.contains("prophecy-libs")
-          }
-          otherJars.foreach { p => debug(s"Adding $p to Scala interpreter's class path...") }
-          sparkILoop.intp.addUrlsToClassPath(otherJars: _*)
-          if (prophecyJars.nonEmpty) {
-            prophecyJars.foreach { p => debug(s"Adding $p to compiler classpath only...") }
-            sparkILoop.intp.asInstanceOf[IMain].global.extendCompilerClassPath(prophecyJars: _*)
-          }
+          extraJarPath.foreach { p => debug(s"Adding $p to Scala interpreter's class path...") }
+          sparkILoop.intp.addUrlsToClassPath(extraJarPath: _*)
           classLoader = null
         } else {
           classLoader = classLoader.getParent
@@ -112,16 +107,7 @@ class SparkInterpreter(protected override val conf: SparkConf) extends AbstractS
   }
 
   override def addJar(jar: String): Unit = {
-    val url = new URL(jar)
-    if (jar.contains("prophecy-libs")) {
-      // Add to compiler classpath only — not the REPL runtime classloader.
-      // The runtime classloader will delegate to the parent MutableURLClassLoader
-      // (which already has this JAR), avoiding the child-first ClassCastException
-      // on Spark 4 where the REPL and SparkListener load different class copies.
-      sparkILoop.intp.asInstanceOf[IMain].global.extendCompilerClassPath(url)
-    } else {
-      sparkILoop.intp.addUrlsToClassPath(url)
-    }
+    sparkILoop.intp.addUrlsToClassPath(new URL(jar))
   }
 
   override protected def isStarted(): Boolean = {
