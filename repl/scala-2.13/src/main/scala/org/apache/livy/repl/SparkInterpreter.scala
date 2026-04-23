@@ -75,12 +75,20 @@ class SparkInterpreter(protected override val conf: SparkConf) extends AbstractS
       while (classLoader != null) {
         if (classLoader.getClass.getCanonicalName ==
           "org.apache.spark.util.MutableURLClassLoader") {
-          val extraJarPath = classLoader.asInstanceOf[URLClassLoader].getURLs()
+          val allUrls = classLoader.asInstanceOf[URLClassLoader].getURLs()
             .filter { u => u.getProtocol == "file" && new File(u.getPath).isFile }
             .filterNot { u => Paths.get(u.toURI).getFileName.toString.startsWith("livy-") }
             .filterNot { u =>
               Paths.get(u.toURI).getFileName.toString.contains("org.scala-lang_scala-reflect")
             }
+
+          // Spark 4's REPL uses a child-first classloader. Adding prophecy-libs to
+          // it causes ClassCastException when the SparkListener (on the parent
+          // MutableURLClassLoader) casts objects created by the REPL classloader.
+          // Keep prophecy-libs only on the parent so both sides share class identity.
+          val extraJarPath = allUrls.filterNot { u =>
+            Paths.get(u.toURI).getFileName.toString.contains("prophecy-libs")
+          }
 
           extraJarPath.foreach { p => debug(s"Adding $p to Scala interpreter's class path...") }
           sparkILoop.intp.addUrlsToClassPath(extraJarPath: _*)
@@ -104,7 +112,28 @@ class SparkInterpreter(protected override val conf: SparkConf) extends AbstractS
   }
 
   override def addJar(jar: String): Unit = {
-    sparkILoop.intp.addUrlsToClassPath(new URL(jar))
+    val url = new URL(jar)
+    if (jar.contains("prophecy-libs")) {
+      // Same treatment as scala-reflect and livy- jars: keep prophecy-libs only on
+      // the parent MutableURLClassLoader to avoid Spark 4's child-first REPL classloader
+      // loading a duplicate copy (which causes ClassCastException across the boundary).
+      // Add to parent classloader so it's resolvable via parent-first delegation.
+      var cl = Thread.currentThread().getContextClassLoader
+      var added = false
+      while (cl != null && !added) {
+        if (cl.getClass.getCanonicalName == "org.apache.spark.util.MutableURLClassLoader") {
+          cl.getClass.getMethod("addURL", classOf[URL]).invoke(cl, url)
+          added = true
+          info(s"Added $jar to parent MutableURLClassLoader (skipping REPL child classloader)")
+        }
+        cl = cl.getParent
+      }
+      if (!added) {
+        sparkILoop.intp.addUrlsToClassPath(url)
+      }
+    } else {
+      sparkILoop.intp.addUrlsToClassPath(url)
+    }
   }
 
   override protected def isStarted(): Boolean = {
