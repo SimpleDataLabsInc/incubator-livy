@@ -72,9 +72,11 @@ class SparkInterpreter(protected override val conf: SparkConf) extends AbstractS
 
     restoreContextClassLoader {
       var classLoader = Thread.currentThread().getContextClassLoader
+      var foundMutableURLCL = false
       while (classLoader != null) {
         if (classLoader.getClass.getCanonicalName ==
           "org.apache.spark.util.MutableURLClassLoader") {
+          foundMutableURLCL = true
           val extraJarPath = classLoader.asInstanceOf[URLClassLoader].getURLs()
             .filter { u => u.getProtocol == "file" && new File(u.getPath).isFile }
             .filterNot { u => Paths.get(u.toURI).getFileName.toString.startsWith("livy-") }
@@ -90,6 +92,45 @@ class SparkInterpreter(protected override val conf: SparkConf) extends AbstractS
           classLoader = null
         } else {
           classLoader = classLoader.getParent
+        }
+      }
+
+      // Spark 4 has no MutableURLClassLoader — initial session JARs from spark.jars
+      // are registered with SparkContext but not added to any classloader.
+      // Find the local copies SparkContext downloaded and add them to the REPL.
+      if (!foundMutableURLCL) {
+        val sparkJars = conf.getOption("spark.jars").toSeq
+          .flatMap(_.split(","))
+          .map(_.trim)
+          .filter(_.nonEmpty)
+
+        if (sparkJars.nonEmpty) {
+          val sparkLocalDir = new File(conf.get("spark.local.dir", System.getProperty("java.io.tmpdir")))
+          val sparkDirs = Option(sparkLocalDir.listFiles())
+            .getOrElse(Array.empty)
+            .filter(f => f.isDirectory && f.getName.startsWith("spark-"))
+
+          val localUrls = sparkJars.flatMap { jarUri =>
+            val jarName = jarUri.split("/").last.split("\\?").head
+            val localCopy = sparkDirs.flatMap { dir =>
+              val candidate = new File(dir, jarName)
+              if (candidate.isFile) Some(candidate) else None
+            }.headOption
+            localCopy match {
+              case Some(f) =>
+                info(s"Found local copy for $jarName: ${f.getAbsolutePath}")
+                Some(f.toURI.toURL)
+              case None =>
+                warn(s"No local copy found for spark.jars entry: $jarUri")
+                None
+            }
+          }
+
+          if (localUrls.nonEmpty) {
+            info(s"No MutableURLClassLoader found (Spark 4). " +
+              s"Adding ${localUrls.size} JARs from spark.jars to REPL classpath.")
+            sparkILoop.intp.addUrlsToClassPath(localUrls: _*)
+          }
         }
       }
 
