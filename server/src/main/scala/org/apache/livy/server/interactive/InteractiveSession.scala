@@ -246,7 +246,7 @@ object InteractiveSession extends Logging {
       } else {
         val sparkHome = livyConf.sparkHome().get
         val libdir = sparkMajorVersion match {
-          case 3 =>
+          case v if v >= 3 =>
             if (new File(sparkHome, "RELEASE").isFile) {
               new File(sparkHome, "jars")
             } else {
