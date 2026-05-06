@@ -296,7 +296,7 @@ class SparkKubernetesApp private[utils] (
       } catch {
         case e: Exception =>
           failToGetAppId()
-          appPromise.failure(e)
+          appPromise.tryFailure(e)
           return
       }
       if (appOption.isEmpty) {
